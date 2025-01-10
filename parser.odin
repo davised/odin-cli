@@ -61,45 +61,53 @@ bg_map := map[string]ANSI_BG_Colors {
 // Returns:
 //   Text_Style_Set: A set containing the parsed text style, if successful.
 //   bool: True if the string was successfully parsed into a text style, false otherwise.
-parse_text_style :: proc(s: string) -> (styles: Text_Style_Set, ok: bool) {
+parse_text_style :: proc(input: string) -> (styles: Text_Style_Set, ok: bool) {
   ok = false
-  switch strings.to_lower(s) {
+  s := strings.split(input, " ")
+  defer delete(s)
+  for &style in s {
+    style = strings.to_lower(style)
+    defer delete(style)
+    switch style {
   case "bold":
-    styles = {.Bold}
+      styles += {.Bold}
     ok = true
-    return
   case "faint":
-    styles = {.Faint}
+      styles += {.Faint}
     ok = true
-    return
   case "italic":
-    styles = {.Italic}
+      styles += {.Italic}
     ok = true
-    return
   case "underline":
-    styles = {.Underline}
+      styles += {.Underline}
     ok = true
-    return
   case "blink_slow":
-    styles = {.Blink_Slow}
+      styles += {.Blink_Slow}
     ok = true
-    return
   case "blink_rapid":
-    styles = {.Blink_Rapid}
+      styles += {.Blink_Rapid}
     ok = true
-    return
   case "invert":
-    styles = {.Invert}
+      styles += {.Invert}
     ok = true
-    return
   case "hide":
-    styles = {.Hide}
+      styles += {.Hide}
     ok = true
-    return
   case "strike":
-    styles = {.Strike}
+      styles += {.Strike}
+      ok = true
+    case:
+      switch package_options.parsing {
+      case .Error:
+        log.errorf("Unknown text style %s", style)
+        ok = false
+      case .Warn:
+        log.warnf("Unknown text style %s", style)
+        ok = true
+      case .Ignore:
     ok = true
-    return
+      }
+    }
   }
   return
 }
