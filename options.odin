@@ -3,23 +3,21 @@ package cli_style
 import "core:fmt"
 import "core:log"
 
+OnError :: enum { Ignore, Warn, Error }
+
 Options :: struct {
-  Debug: bool,
-  ParseError: enum { Ignore, Warn, Error },
+  parsing: OnError,
 }
 
-Default_Options :: Options {
-  Debug = false,
-  ParseError = .Warn,
+package_options := &Options{
+  parsing = OnError.Warn,
 }
-
-package_options: Options
 
 // set_options sets the package-level formatting options.
 //
 // Parameters:
 //   opts: The Options struct containing the desired formatting settings.
-set_options :: proc(opts: Options) {
+set_options :: proc(opts: ^Options) {
   package_options = opts
 }
 
@@ -43,11 +41,9 @@ debug :: proc(line: string, args: ..any, printer: enum { debug, debugf } = .debu
 // init_formatter initializes the formatting system with optional settings.
 // Enables use of println and other default-format printers. Needs to be called before Styled_Text objects can be
 // printed with proper formatting.
-//
-// Parameters:
-//   options: An optional Options struct to configure the formatter. If not provided, Default_Options will be used.
-init_formatter :: proc(options: Options = Default_Options) {
-  set_options(options)
+@(private="file")
+@(init)
+init_formatter :: proc() {
   fmt.set_user_formatters(new(map[typeid]fmt.User_Formatter))
 
   // Register the custom formatter for Styled_Text
