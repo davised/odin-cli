@@ -3,6 +3,7 @@ package cli_style
 import "core:fmt"
 import "core:strconv"
 import "core:strings"
+import "core:math"
 
 ANSI_FG_Colors :: enum u8 {
   None           = 0,
@@ -98,7 +99,7 @@ hsl_to_rgb :: proc(h: f32, s: f32, l: f32) -> (RGB_Color_Data, bool) {
 
   // Handle special case of saturation = 0 (grayscale)
   if s == 0 {
-      v := u8(l * 255)
+      v := u8(math.round_f32(l * 255))
       return RGB_Color_Data{EightBit_Color_Data(v), EightBit_Color_Data(v), EightBit_Color_Data(v)}, true
   }
 
@@ -122,8 +123,8 @@ hsl_to_rgb :: proc(h: f32, s: f32, l: f32) -> (RGB_Color_Data, bool) {
   b := hue_to_rgb(p, q, h_norm - 1.0/3.0)
 
   return RGB_Color_Data{
-      EightBit_Color_Data(r * 255),
-      EightBit_Color_Data(g * 255),
-      EightBit_Color_Data(b * 255),
+      EightBit_Color_Data(math.round_f32(r * 255)),
+      EightBit_Color_Data(math.round_f32(g * 255)),
+      EightBit_Color_Data(math.round_f32(b * 255)),
   }, true
 }
