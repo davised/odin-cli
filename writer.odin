@@ -5,6 +5,7 @@ import "core:encoding/ansi"
 import "core:strings"
 import "core:log"
 import "core:mem"
+import "core:io"
 
 // text_styles_to_sb converts a set of text styles into ANSI escape sequences
 // and appends them to the provided string builder.
@@ -110,8 +111,8 @@ bg_color_to_sb :: proc(data: Color_Data, sb: ^strings.Builder) {
 // Parameters:
 //   styled_text: The `Styled_Text` object whose text content will be appended.
 //   sb: A pointer to the `strings.Builder` where the text and reset sequence will be appended.
-text_to_sb :: proc(styled_text: Styled_Text, sb: ^strings.Builder) {
-  fmt.sbprint(sb, styled_text.Text, ansi.CSI, ansi.RESET, ansi.SGR, sep="",)
+text_to_sb :: proc(text: Text, sb: ^strings.Builder) {
+  fmt.sbprint(sb, text, ansi.CSI, ansi.RESET, ansi.SGR, sep="",)
 }
 
 // print_string_as_bytes is a private debugging procedure that prints each byte
@@ -129,6 +130,7 @@ text_to_sb :: proc(styled_text: Styled_Text, sb: ^strings.Builder) {
 print_string_as_bytes :: proc(s: string) {
   // Convert string to slice of bytes
   bytes := transmute([]u8)s
+  defer delete(bytes)
   
   // Print each byte
   for b, i in bytes {
@@ -203,10 +205,12 @@ generate_formatted_string :: proc() -> string {
 //
 // Returns:
 //   string: The formatted string with embedded ANSI escape codes.
-to_str :: proc(styled_text: Styled_Text) -> string {
-  sb := strings.builder_make()
+to_str :: proc(styled_text: Styled_Text, allocator := context.temp_allocator) -> (string, bool) {
+  if styled_text.Text == Text("") {
+    return "", false
+  }
+  sb := strings.builder_make(allocator = allocator)
   using styled_text.Style
-  defer strings.builder_destroy(&sb)
   
   // Apply text styles
   text_styles_to_sb(Text_Styles, &sb)
@@ -218,9 +222,9 @@ to_str :: proc(styled_text: Styled_Text) -> string {
   bg_color_to_sb(Background_Color, &sb)
 
   // Write text to sb and reset codes
-  text_to_sb(styled_text, &sb)
+  text_to_sb(styled_text.Text, &sb)
 
-  return strings.clone(strings.to_string(sb))
+  return strings.clone(strings.to_string(sb)), true
 }
 
 // Styled_Text_Formatter is a custom formatter for the fmt package that handles
@@ -244,17 +248,27 @@ to_str :: proc(styled_text: Styled_Text) -> string {
 Styled_Text_Formatter :: proc(fi: ^fmt.Info, arg: any, verb: rune) -> (res: bool) {
   res = false
   styled_text := cast(^Styled_Text)arg.data
-  using styled_text^.Style
+
+  // using styled_text^.Style
   if verb != 'v' && verb != 'w' {
-    return
-  }
-  
-  if styled_text.Text == "" {
+    fmt.fmt_bad_verb(fi, verb)
     return
   }
 
-  // Write the formatted string to the fmt.Info writer
-  fmt.wprint(fi.writer, to_str(styled_text^))
+  if styled_text.Text == "" {
+    io.write_string(fi.writer, "")
+    return true
+  }
   
-  return true
+  output, ok := to_str(styled_text^)
+  defer delete(output)
+
+  if ok {
+    io.write_string(fi.writer, output)
+    return true
+  } else {
+    io.write_string(fi.writer, "")
+    return false
+  }
+
 }
