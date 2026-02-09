@@ -1,0 +1,10 @@
+# Build artifacts
+*.bin
+*.bin.dSYM/
+
+# OS
+.DS_Store
+
+# Editor / tools
+.aider*
+.env
