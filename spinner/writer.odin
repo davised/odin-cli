@@ -2,10 +2,10 @@
 #+feature global-context
 package spinner
 
+import "../style"
 import "core:fmt"
 import "core:io"
 import "core:strings"
-import "../style"
 
 @(private = "file")
 _formatter_map: map[typeid]fmt.User_Formatter
@@ -30,7 +30,10 @@ to_writer :: proc(w: io.Writer, s: Spinner, n: ^int = nil) -> bool {
 
 	// Render frame with optional style
 	if ts, has_style := s.text_style.?; has_style {
-		st := style.Styled_Text{text = frame, style = ts}
+		st := style.Styled_Text {
+			text  = frame,
+			style = ts,
+		}
 		style.to_writer(w, st, n) or_return
 	} else {
 		_, err := io.write_string(w, frame, n)

@@ -3,10 +3,10 @@
 package style
 
 import "core:fmt"
-import "core:terminal/ansi"
-import "core:strings"
-import "core:log"
 import "core:io"
+import "core:log"
+import "core:strings"
+import "core:terminal/ansi"
 
 /*
 init_formatter initializes the formatting system with optional settings.
@@ -41,7 +41,7 @@ Inputs:
 	s: The `Text_Style_Set` containing the text styles to be applied.
 	n: A pointer to the int where the number of characters will be summed.
 */
-text_styles_to_writer :: proc(w: io.Writer, s: Text_Style_Set, n: ^int) -> (io.Error) {
+text_styles_to_writer :: proc(w: io.Writer, s: Text_Style_Set, n: ^int) -> io.Error {
 	first := true
 	num_styles := card(s)
 	for style in s {
@@ -76,24 +76,24 @@ Inputs:
 	data: The `Colors` structure containing the foreground color specification.
 	n: A pointer to the int where the number of characters will be summed.
 */
-fg_color_to_writer :: proc(w: io.Writer, data: Colors, n: ^int) -> (io.Error) {
+fg_color_to_writer :: proc(w: io.Writer, data: Colors, n: ^int) -> io.Error {
 	#partial switch c in data {
-		case ANSI_FG:
-			io.write_string(w, ansi.CSI, n) or_return
-			io.write_uint(w, uint(c), 10, n) or_return
-			io.write_string(w, ansi.SGR, n) or_return
-		case EightBit:
-			io.write_string(w, ansi.CSI + ansi.FG_COLOR_8_BIT + ";", n) or_return
-			io.write_uint(w, uint(c), 10, n) or_return
-			io.write_string(w, ansi.SGR, n) or_return
-		case RGB:
-			io.write_string(w, ansi.CSI + ansi.FG_COLOR_24_BIT + ";", n) or_return
-			io.write_uint(w, uint(c.r), 10, n) or_return
-			io.write_string(w, ";", n) or_return
-			io.write_uint(w, uint(c.g), 10, n) or_return
-			io.write_string(w, ";", n) or_return
-			io.write_uint(w, uint(c.b), 10, n) or_return
-			io.write_string(w, ansi.SGR, n) or_return
+	case ANSI_FG:
+		io.write_string(w, ansi.CSI, n) or_return
+		io.write_uint(w, uint(c), 10, n) or_return
+		io.write_string(w, ansi.SGR, n) or_return
+	case EightBit:
+		io.write_string(w, ansi.CSI + ansi.FG_COLOR_8_BIT + ";", n) or_return
+		io.write_uint(w, uint(c), 10, n) or_return
+		io.write_string(w, ansi.SGR, n) or_return
+	case RGB:
+		io.write_string(w, ansi.CSI + ansi.FG_COLOR_24_BIT + ";", n) or_return
+		io.write_uint(w, uint(c.r), 10, n) or_return
+		io.write_string(w, ";", n) or_return
+		io.write_uint(w, uint(c.g), 10, n) or_return
+		io.write_string(w, ";", n) or_return
+		io.write_uint(w, uint(c.b), 10, n) or_return
+		io.write_string(w, ansi.SGR, n) or_return
 	}
 	return io.Error.None
 }
@@ -114,24 +114,24 @@ Inputs:
 	data: The `Colors` structure containing the background color specification.
 	n: A pointer to the int where the number of characters will be summed.
 */
-bg_color_to_writer :: proc(w: io.Writer, data: Colors, n: ^int) -> (io.Error) {
+bg_color_to_writer :: proc(w: io.Writer, data: Colors, n: ^int) -> io.Error {
 	#partial switch c in data {
-		case ANSI_BG:
-			io.write_string(w, ansi.CSI, n) or_return
-			io.write_uint(w, uint(c), 10, n) or_return
-			io.write_string(w, ansi.SGR, n) or_return
-		case EightBit:
-			io.write_string(w, ansi.CSI + ansi.BG_COLOR_8_BIT + ";", n) or_return
-			io.write_uint(w, uint(c), 10, n) or_return
-			io.write_string(w, ansi.SGR, n) or_return
-		case RGB:
-			io.write_string(w, ansi.CSI + ansi.BG_COLOR_24_BIT + ";", n) or_return
-			io.write_uint(w, uint(c.r), 10, n) or_return
-			io.write_string(w, ";", n) or_return
-			io.write_uint(w, uint(c.g), 10, n) or_return
-			io.write_string(w, ";", n) or_return
-			io.write_uint(w, uint(c.b), 10, n) or_return
-			io.write_string(w, ansi.SGR, n) or_return
+	case ANSI_BG:
+		io.write_string(w, ansi.CSI, n) or_return
+		io.write_uint(w, uint(c), 10, n) or_return
+		io.write_string(w, ansi.SGR, n) or_return
+	case EightBit:
+		io.write_string(w, ansi.CSI + ansi.BG_COLOR_8_BIT + ";", n) or_return
+		io.write_uint(w, uint(c), 10, n) or_return
+		io.write_string(w, ansi.SGR, n) or_return
+	case RGB:
+		io.write_string(w, ansi.CSI + ansi.BG_COLOR_24_BIT + ";", n) or_return
+		io.write_uint(w, uint(c.r), 10, n) or_return
+		io.write_string(w, ";", n) or_return
+		io.write_uint(w, uint(c.g), 10, n) or_return
+		io.write_string(w, ";", n) or_return
+		io.write_uint(w, uint(c.b), 10, n) or_return
+		io.write_string(w, ansi.SGR, n) or_return
 	}
 	return io.Error.None
 }
@@ -150,7 +150,7 @@ Inputs:
 	styled_text: The `Styled_Text` object whose text content will be written.
 	n: A pointer to the int where the number of characters will be summed.
 */
-text_to_writer :: proc(w: io.Writer, text: Text, n: ^int) -> (io.Error) {
+text_to_writer :: proc(w: io.Writer, text: Text, n: ^int) -> io.Error {
 	io.write_string(w, text, n) or_return
 	io.write_string(w, ansi.CSI + ansi.RESET + ansi.SGR, n) or_return
 	return io.Error.None
@@ -158,7 +158,7 @@ text_to_writer :: proc(w: io.Writer, text: Text, n: ^int) -> (io.Error) {
 
 to_writer :: proc(writer: io.Writer, styled_text: Styled_Text, n: ^int = nil) -> bool {
 	using styled_text.style
-	
+
 	// Apply text styles
 	if text_styles_to_writer(writer, text_styles, n) != io.Error.None {
 		return false
@@ -210,7 +210,7 @@ to_str :: proc(styled_text: Styled_Text, allocator := context.allocator) -> (str
 
 	sb := strings.builder_make(allocator = allocator)
 	using styled_text.style
-	
+
 	// Apply text styles
 	text_styles_to_writer(strings.to_writer(&sb), text_styles, &n)
 

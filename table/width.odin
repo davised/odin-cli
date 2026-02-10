@@ -121,7 +121,7 @@ distribute_extra :: proc(widths: []int, columns: []Column, extra: int) {
 
 	for remaining > 0 {
 		unlocked_total := 0
-		for i in 0..<len(widths) {
+		for i in 0 ..< len(widths) {
 			if !locked[i] {
 				unlocked_total += widths[i]
 			}
@@ -131,7 +131,7 @@ distribute_extra :: proc(widths: []int, columns: []Column, extra: int) {
 		distributed := 0
 
 		if unlocked_total > 0 {
-			for i in 0..<len(widths) {
+			for i in 0 ..< len(widths) {
 				if locked[i] do continue
 				share := budget * widths[i] / unlocked_total
 				if columns[i].max_width > 0 {
@@ -153,7 +153,7 @@ distribute_extra :: proc(widths: []int, columns: []Column, extra: int) {
 		remaining -= distributed
 		if distributed == 0 {
 			// Integer rounding left us stuck; distribute 1 at a time
-			for i in 0..<len(widths) {
+			for i in 0 ..< len(widths) {
 				if remaining <= 0 do break
 				if locked[i] do continue
 				if columns[i].max_width > 0 && widths[i] >= columns[i].max_width {
@@ -165,8 +165,8 @@ distribute_extra :: proc(widths: []int, columns: []Column, extra: int) {
 			}
 			// Check if all columns are locked
 			all_locked := true
-			for i in 0..<len(widths) {
-				if !locked[i] { all_locked = false; break }
+			for i in 0 ..< len(widths) {
+				if !locked[i] {all_locked = false; break}
 			}
 			if all_locked do break
 		}
@@ -182,7 +182,7 @@ distribute_deficit :: proc(widths: []int, columns: []Column, deficit: int) {
 
 	for remaining > 0 {
 		shrinkable_total := 0
-		for i in 0..<len(widths) {
+		for i in 0 ..< len(widths) {
 			if locked[i] do continue
 			min_w := max(columns[i].min_width, 1)
 			if widths[i] <= min_w {
@@ -196,7 +196,7 @@ distribute_deficit :: proc(widths: []int, columns: []Column, deficit: int) {
 		budget := remaining
 		reduced := 0
 
-		for i in 0..<len(widths) {
+		for i in 0 ..< len(widths) {
 			if locked[i] do continue
 			min_w := max(columns[i].min_width, 1)
 			share := budget * widths[i] / shrinkable_total
@@ -211,7 +211,7 @@ distribute_deficit :: proc(widths: []int, columns: []Column, deficit: int) {
 
 		remaining -= reduced
 		if reduced == 0 {
-			for i in 0..<len(widths) {
+			for i in 0 ..< len(widths) {
 				if remaining <= 0 do break
 				if locked[i] do continue
 				min_w := max(columns[i].min_width, 1)
@@ -223,8 +223,8 @@ distribute_deficit :: proc(widths: []int, columns: []Column, deficit: int) {
 				remaining -= 1
 			}
 			all_locked := true
-			for i in 0..<len(widths) {
-				if !locked[i] { all_locked = false; break }
+			for i in 0 ..< len(widths) {
+				if !locked[i] {all_locked = false; break}
 			}
 			if all_locked do break
 		}

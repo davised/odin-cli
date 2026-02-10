@@ -1,10 +1,10 @@
 package progress_test
 
-import "core:testing"
-import "core:strings"
-import "core:fmt"
-import "core:time"
 import progress ".."
+import "core:fmt"
+import "core:strings"
+import "core:testing"
+import "core:time"
 
 @(test)
 test_to_writer_zero_percent :: proc(t: ^testing.T) {

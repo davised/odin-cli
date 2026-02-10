@@ -1,11 +1,11 @@
 #+feature global-context
 package tree
 
+import style "../style"
+import "../term"
 import "core:fmt"
 import "core:io"
 import "core:strings"
-import style "../style"
-import "../term"
 
 // 64 levels handles any practical tree; exceeding this returns false.
 MAX_DEPTH :: 64
@@ -137,7 +137,14 @@ Returns:
 	string: The rendered tree as a string.
 	bool: true if rendering succeeded.
 */
-to_str :: proc(t: Tree, enumerator: Enumerator = DEFAULT_ENUMERATOR, allocator := context.allocator) -> (string, bool) #optional_ok {
+to_str :: proc(
+	t: Tree,
+	enumerator: Enumerator = DEFAULT_ENUMERATOR,
+	allocator := context.allocator,
+) -> (
+	string,
+	bool,
+) #optional_ok {
 	sb := strings.builder_make(allocator = allocator)
 	ok := to_writer(strings.to_writer(&sb), t, enumerator)
 	return strings.to_string(sb), ok

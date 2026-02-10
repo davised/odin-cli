@@ -1,10 +1,10 @@
 package spinner_test
 
-import "core:testing"
-import "core:strings"
-import "core:time"
 import spinner ".."
 import style "../../style"
+import "core:strings"
+import "core:testing"
+import "core:time"
 
 @(test)
 test_to_writer_basic :: proc(t: ^testing.T) {
@@ -38,10 +38,7 @@ test_to_writer_no_message :: proc(t: ^testing.T) {
 test_to_writer_styled :: proc(t: ^testing.T) {
 	testing.set_fail_timeout(t, 5 * time.Second)
 
-	s := spinner.make_spinner(
-		message = "Working",
-		text_style = style.Style{foreground_color = style.ANSI_FG.Cyan},
-	)
+	s := spinner.make_spinner(message = "Working", text_style = style.Style{foreground_color = style.ANSI_FG.Cyan})
 	result, ok := spinner.to_str(s)
 	defer delete(result)
 
@@ -60,7 +57,7 @@ test_frame_cycling :: proc(t: ^testing.T) {
 	s := spinner.make_spinner(frames = frames, message = "")
 
 	// Render each frame
-	for i in 0..<len(frames.frames) {
+	for i in 0 ..< len(frames.frames) {
 		s._frame_idx = i
 		result, ok := spinner.to_str(s)
 		defer delete(result)

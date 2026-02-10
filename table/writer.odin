@@ -1,10 +1,10 @@
 #+feature global-context
 package table
 
+import "../style"
 import "core:fmt"
 import "core:io"
 import "core:strings"
-import "../style"
 
 @(private = "file")
 _formatter_map: map[typeid]fmt.User_Formatter
@@ -36,7 +36,9 @@ to_writer :: proc(w: io.Writer, t: Table, n: ^int = nil) -> bool {
 	if has_headers {
 		header_cells := make([]Cell, len(t.columns), context.temp_allocator)
 		for col, i in t.columns {
-			header_cells[i] = Cell{content = col.header}
+			header_cells[i] = Cell {
+				content = col.header,
+			}
 		}
 		if !write_row(w, t, header_cells, widths, t.header_config.style, n) do return false
 
@@ -123,33 +125,39 @@ write_border_line :: proc(w: io.Writer, t: Table, widths: []int, pos: Border_Pos
 	if t.border.left {
 		left := chars.top_left
 		switch pos {
-		case .MIDDLE: left = chars.left_tee
-		case .BOTTOM: left = chars.bottom_left
-		case .TOP:    // default
+		case .MIDDLE:
+			left = chars.left_tee
+		case .BOTTOM:
+			left = chars.bottom_left
+		case .TOP: // default
 		}
 		if !write_str(w, left, n) do return false
 	}
 
 	for col_idx := 0; col_idx < len(widths); col_idx += 1 {
 		total := widths[col_idx] + 2 * t.padding
-		for _ in 0..<total {
+		for _ in 0 ..< total {
 			if !write_str(w, chars.horizontal, n) do return false
 		}
 
 		if col_idx < len(widths) - 1 {
 			tee := chars.top_tee
 			switch pos {
-			case .MIDDLE: tee = chars.cross
-			case .BOTTOM: tee = chars.bottom_tee
-			case .TOP:    // default
+			case .MIDDLE:
+				tee = chars.cross
+			case .BOTTOM:
+				tee = chars.bottom_tee
+			case .TOP: // default
 			}
 			if !write_str(w, tee, n) do return false
 		} else if t.border.right {
 			right := chars.top_right
 			switch pos {
-			case .MIDDLE: right = chars.right_tee
-			case .BOTTOM: right = chars.bottom_right
-			case .TOP:    // default
+			case .MIDDLE:
+				right = chars.right_tee
+			case .BOTTOM:
+				right = chars.bottom_right
+			case .TOP: // default
 			}
 			if !write_str(w, right, n) do return false
 		}
@@ -228,11 +236,17 @@ write_cell_content :: proc(
 ) -> bool {
 	switch c in content {
 	case style.Styled_Text:
-		st := style.Styled_Text{text = text, style = c.style}
+		st := style.Styled_Text {
+			text  = text,
+			style = c.style,
+		}
 		return style.to_writer(w, st, n)
 	case string:
 		if s, has_style := fallback_style.?; has_style {
-			st := style.Styled_Text{text = text, style = s}
+			st := style.Styled_Text {
+				text  = text,
+				style = s,
+			}
 			return style.to_writer(w, st, n)
 		}
 		return write_str(w, text, n)
@@ -263,7 +277,7 @@ compute_alignment_padding :: proc(text_w: int, col_w: int, alignment: Alignment)
 
 @(private = "file")
 write_padding :: proc(w: io.Writer, count: int, n: ^int) -> bool {
-	for _ in 0..<count {
+	for _ in 0 ..< count {
 		if !write_str(w, " ", n) do return false
 	}
 	return true

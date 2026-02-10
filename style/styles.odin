@@ -1,10 +1,10 @@
 #+feature using-stmt
 package style
 
+import "core:fmt"
+import "core:log"
 import "core:strings"
 import "core:terminal/ansi"
-import "core:log"
-import "core:fmt"
 
 // Text_Style represents the various text style attributes.
 Text_Style :: enum {
@@ -92,7 +92,7 @@ Text :: string
 
 // Styled_Text holds the Style and the string of the text.
 Styled_Text :: struct {
-	text: Text,
+	text:  Text,
 	style: Style,
 }
 
@@ -107,7 +107,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the bold style applied.
 */
-bold :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+bold :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	value.style.text_styles += {.Bold}
 	return
@@ -122,7 +125,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the faint style applied.
 */
-faint :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+faint :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	value.style.text_styles += {.Faint}
 	return
@@ -137,7 +143,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the italic style applied.
 */
-italic :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+italic :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	value.style.text_styles += {.Italic}
 	return
@@ -152,7 +161,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the underline style applied.
 */
-underline :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+underline :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	value.style.text_styles += {.Underline}
 	return
@@ -167,7 +179,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the slow blink style applied.
 */
-blink_slow :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+blink_slow :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	value.style.text_styles += {.Blink_Slow}
 	return
@@ -182,7 +197,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the rapid blink style applied.
 */
-blink_rapid :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+blink_rapid :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	value.style.text_styles += {.Blink_Rapid}
 	return
@@ -197,7 +215,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the invert style applied.
 */
-invert :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+invert :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	value.style.text_styles += {.Invert}
 	return
@@ -212,7 +233,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the hide style applied.
 */
-hide :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+hide :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	value.style.text_styles += {.Hide}
 	return
@@ -227,7 +251,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the strikethrough style applied.
 */
-strike :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+strike :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	value.style.text_styles += {.Strike}
 	return
@@ -244,7 +271,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the black color applied.
 */
-black :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+black :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -266,7 +296,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the red color applied.
 */
-red :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+red :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -288,7 +321,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the green color applied.
 */
-green :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+green :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -310,7 +346,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the yellow color applied.
 */
-yellow :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+yellow :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -332,7 +371,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the blue color applied.
 */
-blue :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+blue :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -354,7 +396,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the magenta color applied.
 */
-magenta :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+magenta :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -376,7 +421,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the cyan color applied.
 */
-cyan :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+cyan :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -398,7 +446,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the white color applied.
 */
-white :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+white :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -420,7 +471,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the bright black color applied.
 */
-bright_black :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+bright_black :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -442,7 +496,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the bright red color applied.
 */
-bright_red :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+bright_red :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -464,7 +521,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the bright green color applied.
 */
-bright_green :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+bright_green :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -486,7 +546,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the bright yellow color applied.
 */
-bright_yellow :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+bright_yellow :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -508,7 +571,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the bright blue color applied.
 */
-bright_blue :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+bright_blue :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -530,7 +596,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the bright magenta color applied.
 */
-bright_magenta :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+bright_magenta :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -552,7 +621,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the bright cyan color applied.
 */
-bright_cyan :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+bright_cyan :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -574,7 +646,10 @@ Inputs:
 Returns:
 	Styled_Text: The input text with the bright white color applied.
 */
-bright_white :: proc(str: union{string, Styled_Text}, bg: bool = false) -> (value: Styled_Text) {
+bright_white :: proc(str: union {
+		string,
+		Styled_Text,
+	}, bg: bool = false) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
 	using value.style
 	if bg {
@@ -595,11 +670,16 @@ Inputs:
 Returns:
 	Styled_Text: The input text styled as a warning.
 */
-warn :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+warn :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
-	value.style = Style{foreground_color = ANSI_FG.Yellow,
-											background_color = nil,
-											text_styles = {.Bold}}
+	value.style = Style {
+		foreground_color = ANSI_FG.Yellow,
+		background_color = nil,
+		text_styles      = {.Bold},
+	}
 	return
 }
 
@@ -613,11 +693,16 @@ Inputs:
 Returns:
 	Styled_Text: The input text styled as an error.
 */
-error :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+error :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
-	value.style = Style{foreground_color = ANSI_FG.Red,
-											background_color = nil,
-											text_styles = {.Bold}}
+	value.style = Style {
+		foreground_color = ANSI_FG.Red,
+		background_color = nil,
+		text_styles      = {.Bold},
+	}
 	return
 }
 
@@ -631,11 +716,16 @@ Inputs:
 Returns:
 	Styled_Text: The input text styled as a success message.
 */
-success :: proc(str: union{string, Styled_Text}) -> (value: Styled_Text) {
+success :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> (value: Styled_Text) {
 	value = get_or_create_styled_text(str)
-	value.style = Style{foreground_color = ANSI_FG.Green,
-											background_color = nil,
-											text_styles = {.Bold}}
+	value.style = Style {
+		foreground_color = ANSI_FG.Green,
+		background_color = nil,
+		text_styles      = {.Bold},
+	}
 	return
 }
 
@@ -650,7 +740,10 @@ Inputs:
 Returns:
 	Styled_Text: The input as a Styled_Text.
 */
-get_or_create_styled_text :: proc(str: union{string, Styled_Text}) -> Styled_Text {
+get_or_create_styled_text :: proc(str: union {
+		string,
+		Styled_Text,
+	}) -> Styled_Text {
 	if text, is_string := str.(string); is_string {
 		return Styled_Text{text = text}
 	}

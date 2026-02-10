@@ -1,20 +1,20 @@
 package tree
 
-DEFAULT_ENUMERATOR :: Enumerator{
+DEFAULT_ENUMERATOR :: Enumerator {
 	item      = "├── ",
 	last_item = "└── ",
 	branch    = "│   ",
 	padding   = "    ",
 }
 
-ROUNDED_ENUMERATOR :: Enumerator{
+ROUNDED_ENUMERATOR :: Enumerator {
 	item      = "├── ",
 	last_item = "╰── ",
 	branch    = "│   ",
 	padding   = "    ",
 }
 
-ASCII_ENUMERATOR :: Enumerator{
+ASCII_ENUMERATOR :: Enumerator {
 	item      = "|-- ",
 	last_item = "`-- ",
 	branch    = "|   ",

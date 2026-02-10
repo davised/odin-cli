@@ -1,12 +1,12 @@
 #+feature using-stmt
 package progress
 
-import "core:io"
-import "core:os"
-import "core:time"
-import "core:terminal/ansi"
 import "../style"
 import "../term"
+import "core:io"
+import "core:os"
+import "core:terminal/ansi"
+import "core:time"
 
 Bar_Style :: struct {
 	left_cap:  string,
@@ -32,7 +32,7 @@ Progress :: struct {
 
 /* bar_block returns a block-style bar: [████░░░░] */
 bar_block :: proc() -> Bar_Style {
-	return Bar_Style{
+	return Bar_Style {
 		left_cap  = "[",
 		right_cap = "]",
 		fill      = "\u2588", // █
@@ -43,18 +43,12 @@ bar_block :: proc() -> Bar_Style {
 
 /* bar_ascii returns an ASCII-style bar: [====>   ] */
 bar_ascii :: proc() -> Bar_Style {
-	return Bar_Style{
-		left_cap  = "[",
-		right_cap = "]",
-		fill      = "=",
-		empty     = " ",
-		head      = ">",
-	}
+	return Bar_Style{left_cap = "[", right_cap = "]", fill = "=", empty = " ", head = ">"}
 }
 
 /* bar_thin returns a thin-line bar: │━━━───│ */
 bar_thin :: proc() -> Bar_Style {
-	return Bar_Style{
+	return Bar_Style {
 		left_cap  = "\u2502", // │
 		right_cap = "\u2502", // │
 		fill      = "\u2501", // ━
@@ -74,17 +68,17 @@ make_progress :: proc(
 	show_elapsed := false,
 ) -> Progress {
 	bs := bar_style.? or_else bar_block()
-	return Progress{
-		total           = total,
-		current         = 0,
-		width           = width,
-		bar_style       = bs,
-		message         = message,
+	return Progress {
+		total = total,
+		current = 0,
+		width = width,
+		bar_style = bs,
+		message = message,
 		show_percentage = show_percentage,
-		show_count      = show_count,
-		show_elapsed    = show_elapsed,
-		fill_style      = nil,
-		_started        = false,
+		show_count = show_count,
+		show_elapsed = show_elapsed,
+		fill_style = nil,
+		_started = false,
 	}
 }
 

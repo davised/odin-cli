@@ -1,8 +1,8 @@
 package term_test
 
+import term ".."
 import "core:testing"
 import "core:time"
-import term ".."
 
 @(test)
 test_display_width_ascii :: proc(t: ^testing.T) {

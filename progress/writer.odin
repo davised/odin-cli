@@ -2,12 +2,12 @@
 #+feature global-context
 package progress
 
+import "../style"
+import "../term"
 import "core:fmt"
 import "core:io"
 import "core:strings"
 import "core:time"
-import "../style"
-import "../term"
 
 @(private = "file")
 _formatter_map: map[typeid]fmt.User_Formatter
@@ -66,15 +66,18 @@ to_writer :: proc(w: io.Writer, p: Progress, n: ^int = nil) -> bool {
 		fill_buf: [512]u8
 		fill_len := 0
 		fill_str := p.bar_style.fill
-		for _ in 0..<filled {
+		for _ in 0 ..< filled {
 			if fill_len + len(fill_str) > len(fill_buf) do break
 			copy(fill_buf[fill_len:], fill_str)
 			fill_len += len(fill_str)
 		}
-		st := style.Styled_Text{text = string(fill_buf[:fill_len]), style = s}
+		st := style.Styled_Text {
+			text  = string(fill_buf[:fill_len]),
+			style = s,
+		}
 		style.to_writer(w, st, n) or_return
 	} else {
-		for _ in 0..<filled {
+		for _ in 0 ..< filled {
 			write_str(w, p.bar_style.fill, n) or_return
 		}
 	}
@@ -83,7 +86,7 @@ to_writer :: proc(w: io.Writer, p: Progress, n: ^int = nil) -> bool {
 		write_str(w, p.bar_style.head, n) or_return
 	}
 
-	for _ in 0..<empty_count {
+	for _ in 0 ..< empty_count {
 		write_str(w, p.bar_style.empty, n) or_return
 	}
 
@@ -182,8 +185,8 @@ itoa :: proc(buf: []u8, val: int) -> string {
 	v := val
 	if v < 0 do v = 0
 	if v == 0 {
-		buf[len(buf)-1] = '0'
-		return string(buf[len(buf)-1:])
+		buf[len(buf) - 1] = '0'
+		return string(buf[len(buf) - 1:])
 	}
 	i := len(buf)
 	for v > 0 {

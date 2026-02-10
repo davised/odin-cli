@@ -1,14 +1,14 @@
 #+feature using-stmt
 package spinner
 
+import "../style"
 import "core:io"
 import "core:mem"
 import "core:os"
 import "core:sync"
+import "core:terminal/ansi"
 import "core:thread"
 import "core:time"
-import "core:terminal/ansi"
-import "../style"
 
 Spinner_Frames :: struct {
 	frames:   []string,
@@ -16,20 +16,20 @@ Spinner_Frames :: struct {
 }
 
 Spinner :: struct {
-	frames:      Spinner_Frames,
-	message:     string,
-	text_style:  Maybe(style.Style),
-	allocator:   mem.Allocator,
-	_mutex:      sync.Mutex,           // guards message and _frame_idx
-	_stop:       b32,                  // atomic stop flag
-	_thread:     ^thread.Thread,
-	_frame_idx:  int,
-	_running:    bool,
+	frames:     Spinner_Frames,
+	message:    string,
+	text_style: Maybe(style.Style),
+	allocator:  mem.Allocator,
+	_mutex:     sync.Mutex, // guards message and _frame_idx
+	_stop:      b32, // atomic stop flag
+	_thread:    ^thread.Thread,
+	_frame_idx: int,
+	_running:   bool,
 }
 
 /* spinner_dots returns the braille dot spinner frames (80ms). */
 spinner_dots :: proc() -> Spinner_Frames {
-	@(static) frames := [?]string{
+	@(static) frames := [?]string {
 		"\u280B", // ⠋
 		"\u2819", // ⠙
 		"\u2839", // ⠹
@@ -41,33 +41,24 @@ spinner_dots :: proc() -> Spinner_Frames {
 		"\u2807", // ⠇
 		"\u280F", // ⠏
 	}
-	return Spinner_Frames{
-		frames   = frames[:],
-		interval = 80 * time.Millisecond,
-	}
+	return Spinner_Frames{frames = frames[:], interval = 80 * time.Millisecond}
 }
 
 /* spinner_line returns the line spinner frames (130ms). */
 spinner_line :: proc() -> Spinner_Frames {
 	@(static) frames := [?]string{"|", "/", "-", "\\"}
-	return Spinner_Frames{
-		frames   = frames[:],
-		interval = 130 * time.Millisecond,
-	}
+	return Spinner_Frames{frames = frames[:], interval = 130 * time.Millisecond}
 }
 
 /* spinner_circle returns the circle spinner frames (120ms). */
 spinner_circle :: proc() -> Spinner_Frames {
-	@(static) frames := [?]string{
+	@(static) frames := [?]string {
 		"\u25D0", // ◐
 		"\u25D3", // ◓
 		"\u25D1", // ◑
 		"\u25D2", // ◒
 	}
-	return Spinner_Frames{
-		frames   = frames[:],
-		interval = 120 * time.Millisecond,
-	}
+	return Spinner_Frames{frames = frames[:], interval = 120 * time.Millisecond}
 }
 
 /* make_spinner creates a new spinner with the given configuration. */
@@ -78,15 +69,15 @@ make_spinner :: proc(
 	allocator := context.allocator,
 ) -> Spinner {
 	f := frames.? or_else spinner_dots()
-	return Spinner{
-		frames     = f,
-		message    = message,
+	return Spinner {
+		frames = f,
+		message = message,
 		text_style = text_style,
-		allocator  = allocator,
-		_stop      = false,
-		_thread    = nil,
+		allocator = allocator,
+		_stop = false,
+		_thread = nil,
 		_frame_idx = 0,
-		_running   = false,
+		_running = false,
 	}
 }
 
@@ -116,7 +107,7 @@ stop :: proc(s: ^Spinner, final_message := "") {
 
 	if s._thread != nil {
 		thread.join(s._thread)
-		thread.destroy(s._thread)  // frees via thread.creation_allocator
+		thread.destroy(s._thread) // frees via thread.creation_allocator
 		s._thread = nil
 	}
 

@@ -22,7 +22,7 @@ Column :: struct {
 	header:    Cell_Content,
 	alignment: Alignment,
 	min_width: int,
-	max_width: int,   // 0 = unlimited; if both set, max_width takes precedence
+	max_width: int, // 0 = unlimited; if both set, max_width takes precedence
 }
 
 Row :: struct {
@@ -41,22 +41,18 @@ Table :: struct {
 	border:        Border_Style,
 	header_config: Header_Config,
 	padding:       int,
-	width:         int,   // 0 = auto (default), >0 = target total display width
+	width:         int, // 0 = auto (default), >0 = target total display width
 }
 
 /* make_table creates a new Table with the given border style and padding.
 	 The caller must call destroy_table when done. */
-make_table :: proc(
-	border: Border_Style = BORDER_LIGHT,
-	padding: int = 1,
-	allocator := context.allocator,
-) -> Table {
-	return Table{
-		columns       = make([dynamic]Column, allocator),
-		rows          = make([dynamic]Row, allocator),
-		border        = border,
+make_table :: proc(border: Border_Style = BORDER_LIGHT, padding: int = 1, allocator := context.allocator) -> Table {
+	return Table {
+		columns = make([dynamic]Column, allocator),
+		rows = make([dynamic]Row, allocator),
+		border = border,
 		header_config = Header_Config{separator = true},
-		padding       = padding,
+		padding = padding,
 	}
 }
 
@@ -77,12 +73,7 @@ add_column :: proc(
 	min_width: int = 0,
 	max_width: int = 0,
 ) {
-	append(&t.columns, Column{
-		header    = header,
-		alignment = alignment,
-		min_width = min_width,
-		max_width = max_width,
-	})
+	append(&t.columns, Column{header = header, alignment = alignment, min_width = min_width, max_width = max_width})
 }
 
 /* add_row adds a row of cell contents to the table. */
@@ -97,7 +88,7 @@ add_styled_row :: proc(t: ^Table, row_style: style.Style, contents: ..Cell_Conte
 
 /* add_row_cells adds a row with per-cell alignment overrides. */
 add_row_cells :: proc(t: ^Table, cells: ..Cell) {
-	row := Row{
+	row := Row {
 		cells = make([dynamic]Cell, 0, len(cells), t.rows.allocator),
 	}
 	for cell in cells {
@@ -113,7 +104,7 @@ set_header_style :: proc(t: ^Table, header_style: style.Style) {
 
 @(private = "file")
 append_row :: proc(t: ^Table, row_style: Maybe(style.Style), contents: []Cell_Content) {
-	row := Row{
+	row := Row {
 		cells = make([dynamic]Cell, 0, len(contents), t.rows.allocator),
 		style = row_style,
 	}
