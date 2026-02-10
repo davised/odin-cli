@@ -98,7 +98,7 @@ add_styled_row :: proc(t: ^Table, row_style: style.Style, contents: ..Cell_Conte
 /* add_row_cells adds a row with per-cell alignment overrides. */
 add_row_cells :: proc(t: ^Table, cells: ..Cell) {
   row := Row{
-    cells = make([dynamic]Cell, 0, len(cells)),
+    cells = make([dynamic]Cell, 0, len(cells), t.rows.allocator),
   }
   for cell in cells {
     append(&row.cells, cell)
@@ -114,7 +114,7 @@ set_header_style :: proc(t: ^Table, header_style: style.Style) {
 @(private="file")
 _append_row :: proc(t: ^Table, row_style: Maybe(style.Style), contents: []Cell_Content) {
   row := Row{
-    cells = make([dynamic]Cell, 0, len(contents)),
+    cells = make([dynamic]Cell, 0, len(contents), t.rows.allocator),
     style = row_style,
   }
   for content in contents {

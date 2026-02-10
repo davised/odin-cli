@@ -83,6 +83,19 @@ test_root_only :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_empty_tree :: proc(t: ^testing.T) {
+  testing.set_fail_timeout(t, 5 * time.Second)
+
+  tr := tree.Tree{}
+
+  sb := strings.builder_make()
+  defer strings.builder_destroy(&sb)
+  ok := tree.to_writer(strings.to_writer(&sb), tr)
+  testing.expect(t, ok, "to_writer failed")
+  testing.expect_value(t, strings.to_string(sb), "")
+}
+
+@(test)
 test_forest :: proc(t: ^testing.T) {
   testing.set_fail_timeout(t, 5 * time.Second)
 
@@ -249,5 +262,76 @@ test_subtree_enumerator_override :: proc(t: ^testing.T) {
     "│   ├── a\n" +
     "│   ╰── b\n" +
     "└── c\n"
+  testing.expect_value(t, strings.to_string(sb), expected)
+}
+
+@(test)
+test_width_wrapping :: proc(t: ^testing.T) {
+  testing.set_fail_timeout(t, 5 * time.Second)
+
+  // Long labels with width=20.
+  // Connector "├── " / "└── " = 4 display cols each.
+  // Content budget for depth-0 children = 20 - 4 = 16.
+  children := [?]tree.Tree_Item{"very-long-filename.odin", "short"}
+  tr := tree.Tree{root = "my-long-project-name", children = children[:], width = 20}
+
+  sb := strings.builder_make()
+  defer strings.builder_destroy(&sb)
+  ok := tree.to_writer(strings.to_writer(&sb), tr)
+  testing.expect(t, ok, "to_writer failed")
+
+  // Root is unconstrained. "very-long-filename.odin" (23) wraps at 16:
+  //   first line  "very-long-filena" (16)
+  //   cont line   "me.odin" (7) with branch prefix "│   "
+  // "short" (5) fits in 16.
+  expected := "my-long-project-name\n" +
+    "├── very-long-filena\n" +
+    "│   me.odin\n" +
+    "└── short\n"
+  testing.expect_value(t, strings.to_string(sb), expected)
+}
+
+@(test)
+test_width_deep_nesting :: proc(t: ^testing.T) {
+  testing.set_fail_timeout(t, 5 * time.Second)
+
+  // 2-level deep tree with width=20.
+  // Depth-1 child: prefix "    "(4) + connector "└── "(4) → budget = 20-4-4 = 12.
+  leaf := [?]tree.Tree_Item{"deep-nested-label"}
+  mid := tree.Tree{root = "mid", children = leaf[:]}
+  top := [?]tree.Tree_Item{&mid}
+  tr := tree.Tree{root = "root", children = top[:], width = 20}
+
+  sb := strings.builder_make()
+  defer strings.builder_destroy(&sb)
+  ok := tree.to_writer(strings.to_writer(&sb), tr)
+  testing.expect(t, ok, "to_writer failed")
+
+  // "deep-nested-label" (17) wraps at 12:
+  //   first line  "deep-nested-" (12)
+  //   cont line   prefix "    " + cont "    " + "label" (5)
+  expected := "root\n" +
+    "└── mid\n" +
+    "    └── deep-nested-\n" +
+    "        label\n"
+  testing.expect_value(t, strings.to_string(sb), expected)
+}
+
+@(test)
+test_width_zero_unlimited :: proc(t: ^testing.T) {
+  testing.set_fail_timeout(t, 5 * time.Second)
+
+  // width=0 (default) should produce the same output as before — no wrapping.
+  children := [?]tree.Tree_Item{"very-long-filename.odin", "another-long-file.txt"}
+  tr := tree.Tree{root = "my-project", children = children[:]}
+
+  sb := strings.builder_make()
+  defer strings.builder_destroy(&sb)
+  ok := tree.to_writer(strings.to_writer(&sb), tr)
+  testing.expect(t, ok, "to_writer failed")
+
+  expected := "my-project\n" +
+    "├── very-long-filename.odin\n" +
+    "└── another-long-file.txt\n"
   testing.expect_value(t, strings.to_string(sb), expected)
 }

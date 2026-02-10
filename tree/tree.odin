@@ -25,9 +25,11 @@ Tree :: struct {
   root:       Tree_Root,
   children:   []Tree_Item,
   enumerator: ^Enumerator,
+  width:      int, // max display columns (0 = unlimited)
 }
 
-/* Characters used to draw tree connectors. */
+/* Characters used to draw tree connectors.
+   All four fields must have the same display width for proper alignment. */
 Enumerator :: struct {
   item:      string, // non-last child connector, e.g. "├── "
   last_item: string, // last child connector,     e.g. "└── "

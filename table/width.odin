@@ -1,9 +1,7 @@
 package table
 
-import "core:unicode/utf8"
 import "../style"
-
-ELLIPSIS :: "…"
+import "../term"
 
 /* display_width returns the display width of a Cell_Content value. */
 display_width :: proc(content: Cell_Content) -> int {
@@ -16,12 +14,10 @@ display_width :: proc(content: Cell_Content) -> int {
   return 0
 }
 
-/* text_display_width returns the display width of a plain string.
-   Uses rune count as an approximation (1 rune = 1 column).
-   Note: CJK/fullwidth characters (2 columns each) and combining marks
-   (0 columns) are not handled — tables containing these may misalign. */
+/* text_display_width returns the monospace terminal cell width of a plain string.
+   Handles CJK/fullwidth (2 cols), combining marks (0 cols), emoji, etc. */
 text_display_width :: proc(s: string) -> int {
-  return utf8.rune_count_in_string(s)
+  return term.display_width(s)
 }
 
 /* compute_column_widths calculates the rendered width for each column,
@@ -235,29 +231,9 @@ _distribute_deficit :: proc(widths: []int, columns: []Column, deficit: int) {
   }
 }
 
-/* truncate_text truncates a string to max_width runes, appending an
-   ellipsis if truncation occurs. Returns the original string if it fits. */
+/* truncate_text truncates a string to fit within max_width display columns,
+   appending an ellipsis if truncation occurs. Returns the original string
+   if it fits or if max_width is 0 (unlimited). */
 truncate_text :: proc(s: string, max_width: int) -> string {
-  if max_width <= 0 {
-    return s
-  }
-  rune_len := utf8.rune_count_in_string(s)
-  if rune_len <= max_width {
-    return s
-  }
-  // Truncate to max_width-1 runes + ellipsis
-  if max_width <= 1 {
-    return ELLIPSIS
-  }
-  target := max_width - 1
-  byte_offset := 0
-  for i := 0; i < target; i += 1 {
-    _, size := utf8.decode_rune_in_string(s[byte_offset:])
-    byte_offset += size
-  }
-  // Build truncated string in temp allocator
-  buf := make([]u8, byte_offset + len(ELLIPSIS), context.temp_allocator)
-  copy(buf[:byte_offset], s[:byte_offset])
-  copy(buf[byte_offset:], ELLIPSIS)
-  return string(buf)
+  return term.truncate(s, max_width)
 }

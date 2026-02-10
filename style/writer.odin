@@ -13,14 +13,15 @@ init_formatter initializes the formatting system with optional settings.
 
 Enables use of println and other default-format printers.
 */
-@(private="file")
+@(private = "file")
+_formatter_map: map[typeid]fmt.User_Formatter
+
+@(private = "file")
 @(init)
 init_formatter :: proc() {
   if fmt._user_formatters == nil {
-    fmt.set_user_formatters(new(map[typeid]fmt.User_Formatter))
+    fmt._user_formatters = &_formatter_map
   }
-
-  // Register the custom formatter for Styled_Text
   fmt.register_user_formatter(type_info_of(Styled_Text).id, Styled_Text_Formatter)
 }
 
