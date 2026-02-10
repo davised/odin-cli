@@ -343,7 +343,7 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
     hsl_str := color_str[4:len(color_str)-1]
     hsl_parts := strings.count(hsl_str, ",")
 
-    if hsl_parts != 3 {
+    if hsl_parts != 2 {
         switch package_options.parsing{
         case .Error:
           log.errorf("Invalid HSL format (wrong number of components): '%s'", color_str)
@@ -409,7 +409,7 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
     rgb_str := color_str[4:len(color_str)-1]
     rgb_parts := strings.count(rgb_str, ",")
     
-    if rgb_parts != 3 {
+    if rgb_parts != 2 {
       switch package_options.parsing{
       case .Error:
         log.errorf("Invalid RGB format (wrong number of components): '%s'", color_str)
