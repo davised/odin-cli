@@ -11,7 +11,7 @@ winner :: proc(str: union {
 	}) -> style.Styled_Text {
 	value := style.get_or_create_styled_text(str)
 	value.style = style.Style {
-		foreground_color = style.ANSI_FG.Bright_Green,
+		foreground_color = style.ANSI_Color.Bright_Green,
 		text_styles      = {.Bold, .Italic, .Blink_Rapid},
 	}
 	return value
@@ -64,7 +64,7 @@ main :: proc() {
 	// 1. Basic styled text with simple colors
 	styled_text1 := style.Styled_Text {
 		text = "Red Text",
-		style = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_FG.Red},
+		style = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Red},
 	}
 	fmt.println(styled_text1)
 	fmt.printfln("%w", styled_text1)

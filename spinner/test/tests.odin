@@ -38,7 +38,7 @@ test_to_writer_no_message :: proc(t: ^testing.T) {
 test_to_writer_styled :: proc(t: ^testing.T) {
 	testing.set_fail_timeout(t, 5 * time.Second)
 
-	s := spinner.make_spinner(message = "Working", text_style = style.Style{foreground_color = style.ANSI_FG.Cyan})
+	s := spinner.make_spinner(message = "Working", text_style = style.Style{foreground_color = style.ANSI_Color.Cyan})
 	result, ok := spinner.to_str(s)
 	defer delete(result)
 
