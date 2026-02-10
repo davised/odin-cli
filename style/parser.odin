@@ -1,3 +1,5 @@
+#+feature dynamic-literals
+#+feature global-context
 package style
 
 import "core:strings"

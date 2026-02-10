@@ -1,7 +1,9 @@
+#+feature using-stmt
+#+feature global-context
 package style
 
 import "core:fmt"
-import "core:encoding/ansi"
+import "core:terminal/ansi"
 import "core:strings"
 import "core:log"
 import "core:io"
