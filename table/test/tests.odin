@@ -634,3 +634,127 @@ test_fill_width_zero :: proc(t: ^testing.T) {
 
     testing.expect_value(t, result, expected)
 }
+
+@(test)
+test_fill_width_no_border :: proc(t: ^testing.T) {
+    testing.set_fail_timeout(t, 5 * time.Second)
+
+    // BORDER_NONE: no left/right/separator chars.
+    // Overhead = just padding: 2 cols * 2 * 1 = 4.
+    // width=20 → available=16, natural=[2,2], extra=12 → [8,8].
+    tbl := table.make_table(border = table.BORDER_NONE)
+    defer table.destroy_table(&tbl)
+
+    tbl.width = 20
+    table.add_column(&tbl, "A")
+    table.add_column(&tbl, "B")
+    table.add_row(&tbl, "xx", "yy")
+
+    widths := table.compute_column_widths(tbl)
+
+    testing.expect_value(t, widths[0] + widths[1], 16)
+}
+
+@(test)
+test_fill_width_exact_fit :: proc(t: ^testing.T) {
+    testing.set_fail_timeout(t, 5 * time.Second)
+
+    // Natural widths [5,3] = 8. Overhead = 7. Total natural = 15.
+    // Setting width=15 should change nothing.
+    tbl := table.make_table(border = table.BORDER_ASCII)
+    defer table.destroy_table(&tbl)
+
+    tbl.width = 15
+    table.add_column(&tbl, "Name")
+    table.add_column(&tbl, "Age")
+    table.add_row(&tbl, "Alice", "30")
+
+    result, ok := table.to_str(tbl)
+    defer delete(result)
+
+    testing.expect(t, ok, "exact fit should succeed")
+
+    // Same as auto-sized output
+    auto_tbl := table.make_table(border = table.BORDER_ASCII)
+    defer table.destroy_table(&auto_tbl)
+
+    table.add_column(&auto_tbl, "Name")
+    table.add_column(&auto_tbl, "Age")
+    table.add_row(&auto_tbl, "Alice", "30")
+
+    auto_result, auto_ok := table.to_str(auto_tbl)
+    defer delete(auto_result)
+
+    testing.expect(t, auto_ok, "auto table should succeed")
+    testing.expect_value(t, result, auto_result)
+}
+
+@(test)
+test_fill_width_extreme_shrink :: proc(t: ^testing.T) {
+    testing.set_fail_timeout(t, 5 * time.Second)
+
+    // Shrink so tight that columns hit minimum width of 1.
+    // 2 cols, overhead=7, width=9 → available=2 → each column gets 1.
+    tbl := table.make_table(border = table.BORDER_ASCII)
+    defer table.destroy_table(&tbl)
+
+    tbl.width = 9
+    table.add_column(&tbl, "Name")
+    table.add_column(&tbl, "Value")
+    table.add_row(&tbl, "hello", "world")
+
+    widths := table.compute_column_widths(tbl)
+
+    testing.expect_value(t, widths[0], 1)
+    testing.expect_value(t, widths[1], 1)
+
+    // Content should be just ellipsis
+    result, ok := table.to_str(tbl)
+    defer delete(result)
+
+    testing.expect(t, ok, "extreme shrink should succeed")
+    testing.expect(t, strings.contains(result, "| … | … |"), "cells should show single ellipsis")
+}
+
+@(test)
+test_fill_width_uneven_columns :: proc(t: ^testing.T) {
+    testing.set_fail_timeout(t, 5 * time.Second)
+
+    // 3 columns with different natural widths: [1, 5, 10] = 16.
+    // ASCII overhead for 3 cols: left(1)+right(1)+2 seps(2)+padding(3*2*1=6) = 10.
+    // width=46 → available=36, extra=20.
+    // Wider columns get proportionally more extra space.
+    tbl := table.make_table(border = table.BORDER_ASCII)
+    defer table.destroy_table(&tbl)
+
+    tbl.width = 46
+    table.add_column(&tbl, "A")
+    table.add_column(&tbl, "BBBBB")
+    table.add_column(&tbl, "CCCCCCCCCC")
+    table.add_row(&tbl, "x", "yyyyy", "zzzzzzzzzz")
+
+    widths := table.compute_column_widths(tbl)
+
+    // Verify total fills available space
+    total := 0
+    for w in widths {
+        total += w
+    }
+    testing.expect_value(t, total, 36)
+
+    // Wider columns should get more space
+    testing.expect(t, widths[2] > widths[1], "wider natural column should get more extra space")
+    testing.expect(t, widths[1] > widths[0], "medium column should get more than narrow column")
+
+    // Verify rendered line widths are all 46
+    result, ok := table.to_str(tbl)
+    defer delete(result)
+    testing.expect(t, ok, "uneven columns should succeed")
+
+    lines := strings.split(result, "\n")
+    defer delete(lines)
+    for line in lines {
+        if line == "" do continue
+        testing.expect_value(t, table.text_display_width(line), 46)
+    }
+}
