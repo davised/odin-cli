@@ -242,7 +242,7 @@ test_styled_cells :: proc(t: ^testing.T) {
 
 	// Row with row-level style
 	row_style := style.Style {
-		foreground_color = style.ANSI_FG.Red,
+		foreground_color = style.ANSI_Color.Red,
 	}
 	table.add_styled_row(&tbl, row_style, "FAIL", "Error occurred")
 

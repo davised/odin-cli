@@ -9,7 +9,6 @@ import "core:time"
 
 @(test)
 test_hsl_to_rgb :: proc(t: ^testing.T) {
-	// Test cases: { h, s, l, expected_r, expected_g, expected_b }
 	test_cases := []struct {
 		h, s, l:                            f32,
 		expected_r, expected_g, expected_b: u8,
@@ -48,38 +47,36 @@ test_hsl_to_rgb :: proc(t: ^testing.T) {
 
 @(test)
 test_parse_color :: proc(t: ^testing.T) {
-	// Test cases: { input_string, expected_color_data, expected_ok }
 	test_cases := []struct {
 		input_string:   string,
-		bg_flag:        bool,
 		expected_color: style.Colors,
 		expected_ok:    bool,
 	} {
-		{"red", false, style.ANSI_FG.Red, true},
-		{"RED", false, style.ANSI_FG.Red, false},
-		{"brightblue", false, style.ANSI_FG.Bright_Blue, true},
-		{"black", true, style.ANSI_BG.Black, true},
-		{"#FF0000", false, style.RGB{255, 0, 0}, false},
-		{"#ff0000", false, style.RGB{255, 0, 0}, true},
-		{"FF0000", false, style.RGB{255, 0, 0}, false},
-		{"rgb(255,0,0)", false, style.RGB{255, 0, 0}, true},
-		{"rgb( 255 , 0 , 0 )", false, style.RGB{255, 0, 0}, true},
-		{"hsl(0,1,0.5)", false, style.RGB{255, 0, 0}, true},
-		{"hsl(0, 1, 0.5)", false, style.RGB{255, 0, 0}, true},
-		{"hsl(120,1,0.5)", false, style.RGB{0, 255, 0}, true},
-		{"hsl(240,1,0.5)", false, style.RGB{0, 0, 255}, true},
-		{"hsl(180, 0.5, 0.5)", false, style.RGB{64, 191, 191}, true},
-		{"hsl(0, 0, 0.75)", false, style.RGB{191, 191, 191}, true},
-		{"hsl(0, 0, 0.44)", false, style.RGB{112, 112, 112}, true},
-		{"hsl(0, 0, 0.17)", false, style.RGB{43, 43, 43}, true},
-		{"color(1)", false, style.EightBit(1), true},
-		{"color(255)", false, style.EightBit(255), true},
-		{"badcolor", false, nil, false},
-		{"rgb(255,0,0,0)", false, nil, false},
-		{"rgb(256,0,0)", false, nil, false},
-		{"hsl(0,1,0.5,0)", false, nil, false},
-		{"hsl(0,2,0.5)", false, nil, false},
-		{"color(256)", false, nil, false},
+		{"red", style.ANSI_Color.Red, true},
+		{"RED", style.ANSI_Color.Red, false},
+		{"brightblue", style.ANSI_Color.Bright_Blue, true},
+		{"black", style.ANSI_Color.Black, true},
+		{"#FF0000", style.RGB{255, 0, 0}, false},
+		{"#ff0000", style.RGB{255, 0, 0}, true},
+		{"FF0000", style.RGB{255, 0, 0}, false},
+		{"rgb(255,0,0)", style.RGB{255, 0, 0}, true},
+		{"rgb( 255 , 0 , 0 )", style.RGB{255, 0, 0}, true},
+		{"hsl(0,1,0.5)", style.RGB{255, 0, 0}, true},
+		{"hsl(0, 1, 0.5)", style.RGB{255, 0, 0}, true},
+		{"hsl(120,1,0.5)", style.RGB{0, 255, 0}, true},
+		{"hsl(240,1,0.5)", style.RGB{0, 0, 255}, true},
+		{"hsl(180, 0.5, 0.5)", style.RGB{64, 191, 191}, true},
+		{"hsl(0, 0, 0.75)", style.RGB{191, 191, 191}, true},
+		{"hsl(0, 0, 0.44)", style.RGB{112, 112, 112}, true},
+		{"hsl(0, 0, 0.17)", style.RGB{43, 43, 43}, true},
+		{"color(1)", style.EightBit(1), true},
+		{"color(255)", style.EightBit(255), true},
+		{"badcolor", nil, false},
+		{"rgb(255,0,0,0)", nil, false},
+		{"rgb(256,0,0)", nil, false},
+		{"hsl(0,1,0.5,0)", nil, false},
+		{"hsl(0,2,0.5)", nil, false},
+		{"color(256)", nil, false},
 	}
 	testing.set_fail_timeout(t, 5 * time.Second)
 
@@ -88,7 +85,7 @@ test_parse_color :: proc(t: ^testing.T) {
 	style.package_options.parsing = style.OnError.Warn
 
 	for test_case in test_cases {
-		color, ok := style.parse_color(test_case.input_string, test_case.bg_flag)
+		color, ok := style.parse_color(test_case.input_string)
 		testing.expectf(
 			t,
 			ok == test_case.expected_ok,
@@ -116,8 +113,8 @@ test_st :: proc(t: ^testing.T) {
 		expected_ok:       bool,
 	} {
 		{"hello", "bold", "hello", {style.Text_Style.Bold}, nil, nil, true},
-		{"world", "italic red", "world", {style.Text_Style.Italic}, style.ANSI_FG.Red, nil, true},
-		{"test", "fg:blue bg:#00FF00", "test", {}, style.ANSI_FG.Blue, style.RGB{0, 255, 0}, true},
+		{"world", "italic red", "world", {style.Text_Style.Italic}, style.ANSI_Color.Red, nil, true},
+		{"test", "fg:blue bg:#00FF00", "test", {}, style.ANSI_Color.Blue, style.RGB{0, 255, 0}, true},
 		{
 			"123",
 			"underline bold fg:rgb(255, 0, 0)bg:hsl(120,1,0.5)",
@@ -180,47 +177,44 @@ test_st :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_fg_color_to_writer :: proc(t: ^testing.T) {
-	test_cases := []struct {
+test_color_to_writer :: proc(t: ^testing.T) {
+	// Foreground tests
+	fg_cases := []struct {
 		color:           style.Colors,
 		expected_output: string,
 	} {
-		{style.ANSI_FG.Red, "\x1b[31m"},
-		{style.ANSI_FG.Bright_Green, "\x1b[92m"},
+		{style.ANSI_Color.Red, "\x1b[31m"},
+		{style.ANSI_Color.Bright_Green, "\x1b[92m"},
 		{style.EightBit(123), "\x1b[38;5;123m"},
 		{style.RGB{255, 0, 100}, "\x1b[38;2;255;0;100m"},
 	}
 
 	testing.set_fail_timeout(t, 5 * time.Second)
 
-	for test_case in test_cases {
+	for test_case in fg_cases {
 		sb := strings.builder_make()
 		n := 0
-		style.fg_color_to_writer(strings.to_writer(&sb), test_case.color, &n)
+		style.color_to_writer(strings.to_writer(&sb), test_case.color, false, &n)
 		output := strings.to_string(sb)
 		testing.expect_value(t, output, test_case.expected_output)
 		strings.builder_destroy(&sb)
 	}
-}
 
-@(test)
-test_bg_color_to_writer :: proc(t: ^testing.T) {
-	test_cases := []struct {
+	// Background tests
+	bg_cases := []struct {
 		color:           style.Colors,
 		expected_output: string,
 	} {
-		{style.ANSI_BG.Blue, "\x1b[44m"},
-		{style.ANSI_BG.Bright_Magenta, "\x1b[105m"},
+		{style.ANSI_Color.Blue, "\x1b[44m"},
+		{style.ANSI_Color.Bright_Magenta, "\x1b[105m"},
 		{style.EightBit(55), "\x1b[48;5;55m"},
 		{style.RGB{10, 200, 5}, "\x1b[48;2;10;200;5m"},
 	}
 
-	testing.set_fail_timeout(t, 5 * time.Second)
-
-	for test_case in test_cases {
+	for test_case in bg_cases {
 		sb := strings.builder_make()
 		n := 0
-		style.bg_color_to_writer(strings.to_writer(&sb), test_case.color, &n)
+		style.color_to_writer(strings.to_writer(&sb), test_case.color, true, &n)
 		output := strings.to_string(sb)
 		testing.expect_value(t, output, test_case.expected_output)
 		strings.builder_destroy(&sb)
@@ -265,7 +259,7 @@ test_text_styles_to_writer :: proc(t: ^testing.T) {
 @(test)
 test_text_to_writer :: proc(t: ^testing.T) {
 	test_cases := []struct {
-		text:            style.Text,
+		text:            string,
 		expected_output: string,
 	}{{"hello", "hello\x1b[0m"}, {"world", "world\x1b[0m"}}
 
@@ -290,7 +284,7 @@ test_to_str :: proc(t: ^testing.T) {
 		{
 			style.Styled_Text {
 				text = "hello",
-				style = style.Style{text_styles = {style.Text_Style.Bold}, foreground_color = style.ANSI_FG.Red},
+				style = style.Style{text_styles = {style.Text_Style.Bold}, foreground_color = style.ANSI_Color.Red},
 			},
 			"\x1b[1m\x1b[31mhello\x1b[0m",
 		},
@@ -313,6 +307,7 @@ test_to_str :: proc(t: ^testing.T) {
 		output, ok := style.to_str(test_case.styled_text)
 		defer delete(output)
 
+		testing.expect(t, ok, "to_str should return ok=true")
 		testing.expect_value(t, output, test_case.expected_output)
 	}
 }
@@ -326,7 +321,7 @@ test_Styled_Text_Formatter :: proc(t: ^testing.T) {
 		{
 			style.Styled_Text {
 				text = "hello",
-				style = style.Style{text_styles = {style.Text_Style.Bold}, foreground_color = style.ANSI_FG.Red},
+				style = style.Style{text_styles = {style.Text_Style.Bold}, foreground_color = style.ANSI_Color.Red},
 			},
 			"\x1b[1m\x1b[31mhello\x1b[0m",
 		},
@@ -344,7 +339,7 @@ test_Styled_Text_Formatter :: proc(t: ^testing.T) {
 		{
 			style.Styled_Text {
 				text = "",
-				style = style.Style{text_styles = {style.Text_Style.Bold}, foreground_color = style.ANSI_FG.Red},
+				style = style.Style{text_styles = {style.Text_Style.Bold}, foreground_color = style.ANSI_Color.Red},
 			},
 			"",
 		},
@@ -352,7 +347,6 @@ test_Styled_Text_Formatter :: proc(t: ^testing.T) {
 
 	testing.set_fail_timeout(t, 5 * time.Second)
 
-	debug := true
 	style.package_options.parsing = .Warn
 	context.logger = log.create_console_logger()
 	defer log.destroy_console_logger(context.logger)

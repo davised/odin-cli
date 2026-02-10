@@ -2,22 +2,24 @@
 #+feature dynamic-literals
 package style
 
-import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:strconv"
 import "core:strings"
 
+// OnError controls how parsing errors are reported.
 OnError :: enum {
 	Ignore,
 	Warn,
 	Error,
 }
 
+// Options holds package-level configuration.
 Options :: struct {
 	parsing: OnError,
 }
 
+// package_options stores the current package-level options (default: parsing = .Warn).
 package_options: Options = Options{parsing = .Warn}
 
 // set_options sets the package-level formatting options.
@@ -25,19 +27,23 @@ set_options :: proc(opts: ^Options) {
 	package_options.parsing = opts.parsing
 }
 
-invalid_parsing_enum_msg :: proc() {
-	log.errorf("The package_options.parsing setting (%w) is invalid. This should not happen.", package_options.parsing)
+// report logs a message at the level determined by `package_options.parsing`.
+@(private)
+report :: proc(msg: string, args: ..any) {
+	switch package_options.parsing {
+	case .Error:
+		log.errorf(msg, ..args)
+	case .Warn:
+		log.warnf(msg, ..args)
+	case .Ignore:
+		when ODIN_DEBUG {
+			log.debugf(msg, ..args)
+		}
+	}
 }
 
-/*
-fg_map maps string representations of foreground colors to their corresponding ANSI_FG enum values.
-This map is used to quickly look up the ANSI code for a given foreground color name.
-
-Example keys: "red", "brightblue"
-Example values: ANSI_FG.Red, ANSI_FG.Bright_Blue
-*/
-fg_map := map[string]ANSI_FG {
-	"none"          = .None,
+// color_map maps lowercase color names to their ANSI_Color values.
+color_map := map[string]ANSI_Color {
 	"black"         = .Black,
 	"red"           = .Red,
 	"green"         = .Green,
@@ -56,41 +62,8 @@ fg_map := map[string]ANSI_FG {
 	"brightwhite"   = .Bright_White,
 }
 
-/*
-bg_map maps string representations of background colors to their corresponding ANSI_BG enum values.
-This map is used to quickly look up the ANSI code for a given background color name.
-
-Example keys: "red", "brightblue"
-Example values: ANSI_BG.Red, ANSI_BG.Bright_Blue
-*/
-bg_map := map[string]ANSI_BG {
-	"none"          = .None,
-	"black"         = .Black,
-	"red"           = .Red,
-	"green"         = .Green,
-	"yellow"        = .Yellow,
-	"blue"          = .Blue,
-	"magenta"       = .Magenta,
-	"cyan"          = .Cyan,
-	"white"         = .White,
-	"brightblack"   = .Bright_Black,
-	"brightred"     = .Bright_Red,
-	"brightgreen"   = .Bright_Green,
-	"brightyellow"  = .Bright_Yellow,
-	"brightblue"    = .Bright_Blue,
-	"brightmagenta" = .Bright_Magenta,
-	"brightcyan"    = .Bright_Cyan,
-	"brightwhite"   = .Bright_White,
-}
-
-/*
-style_map maps string representations of text styles to their corresponding Text_Style enum values.
-
-Example keys: "bold", "italic"
-Example values: Text_Style.Bold, Text_Style,Italic
-*/
+// style_map maps lowercase style names to their Text_Style values.
 style_map := map[string]Text_Style {
-	"none"        = .None,
 	"bold"        = .Bold,
 	"faint"       = .Faint,
 	"italic"      = .Italic,
@@ -103,18 +76,17 @@ style_map := map[string]Text_Style {
 }
 
 /*
-hex_to_rgb converts a hex color string to an RGB struct.
-It accepts strings with or without the leading '#'.
+hex_to_rgb converts a hexadecimal color string to an RGB struct.
+Accepts strings with or without the leading '#'.
 
 Inputs:
-	hex_string: The hexadecimal color string (e.g., "#FF0000" or "FF0000").
+- hex_string: The hexadecimal color string (e.g., "#ff0000" or "ff0000").
 
 Returns:
-	RGB: The RGB color data.
-	bool: True if the conversion was successful, false otherwise.
+- The RGB color value.
+- true if the conversion was successful, false otherwise.
 */
 hex_to_rgb :: proc(hex_string: string) -> (RGB, bool) {
-	// Remove the '#' if it exists
 	hex_bytes: string
 	if strings.has_prefix(hex_string, "#") {
 		hex_bytes = hex_string[1:]
@@ -122,17 +94,14 @@ hex_to_rgb :: proc(hex_string: string) -> (RGB, bool) {
 		hex_bytes = hex_string
 	}
 
-	// Check for valid length (6 hex characters)
 	if len(hex_bytes) != 6 {
 		return RGB{}, false
 	}
 
-	// Parse each color component
 	r, err_r := strconv.parse_uint(hex_bytes[0:2], 16)
 	g, err_g := strconv.parse_uint(hex_bytes[2:4], 16)
 	b, err_b := strconv.parse_uint(hex_bytes[4:6], 16)
 
-	// Check for parsing errors
 	if !err_r || !err_g || !err_b {
 		return RGB{}, false
 	}
@@ -141,30 +110,27 @@ hex_to_rgb :: proc(hex_string: string) -> (RGB, bool) {
 }
 
 /*
-hsl_to_rgb converts HSL color values to RGB.
+hsl_to_rgb converts HSL (hue, saturation, lightness) color values to RGB.
 
 Inputs:
-	h: The hue value (0-360 degrees).
-	s: The saturation value (0.0-1.0).
-	l: The lightness value (0.0-1.0).
+- h: Hue in degrees (0-360).
+- s: Saturation (0.0-1.0).
+- l: Lightness (0.0-1.0).
 
 Returns:
-	RGB: The RGB color data.
-	bool: True if the conversion was successful, false otherwise (e.g., if input values are out of range).
+- The RGB color value.
+- true if successful, false if any input value is out of range.
 */
 hsl_to_rgb :: proc(h: f32, s: f32, l: f32) -> (RGB, bool) {
-	// Validate input ranges
 	if h < 0 || h > 360 || s < 0 || s > 1 || l < 0 || l > 1 {
 		return RGB{}, false
 	}
 
-	// Handle special case of saturation = 0 (grayscale)
 	if s == 0 {
 		v := u8(math.round_f32(l * 255))
 		return RGB{EightBit(v), EightBit(v), EightBit(v)}, true
 	}
 
-	// Helper function for hue to RGB conversion
 	hue_to_rgb :: proc(p, q: f32, t: f32) -> f32 {
 		t_adj := t
 		if t_adj < 0 do t_adj += 1
@@ -192,25 +158,27 @@ hsl_to_rgb :: proc(h: f32, s: f32, l: f32) -> (RGB, bool) {
 }
 
 /*
-st takes a text string and a style string and returns a Styled_Text.
-The style string can contain text styles (bold, italic, etc.) and color specifications
-for the foreground (fg:<color>) and background (bg:<color>).
-Note: If a color code is found without a prefix, it is assumed to be foreground.
+st parses a style string and applies it to the given text, returning a Styled_Text.
+The style string can contain space-separated text styles and color specifications.
+Colors without a prefix are assumed to be foreground.
 
 Supported color formats:
-	- Named colors: black, red, green, etc.
-	- Hexadecimal: #RRGGBB or RRGGBB
-	- RGB: rgb(r,g,b) where r, g, and b are 0-255
-	- 8-bit color: color(n) where n is 0-255
-	- HSL: hsl(h,s,l) where h is 0-360, s and l are between 0..=1
+- Named colors: black, red, green, brightblue, etc.
+- Hexadecimal: #rrggbb or rrggbb
+- RGB: rgb(r,g,b) where r, g, b are 0-255
+- 8-bit: color(n) where n is 0-255
+- HSL: hsl(h,s,l) where h is 0-360, s and l are 0.0-1.0
+
+Prefixes `fg:` and `bg:` select foreground or background color targets.
 
 Inputs:
-	text: The string of text to be styled.
-	style_string: A string specifying the desired styles.
+- text: The string to be styled.
+- style_string: A space-separated string of style and color tokens.
+- allocator: (default: context.temp_allocator)
 
 Returns:
-	Styled_Text: The text with the applied styles.
-	bool (optional): Indicates if the style string was parsed successfully.
+- The styled text with the parsed styles applied.
+- true if parsing succeeded (or only produced warnings), false on error or empty text.
 */
 st :: proc(
 	text: string,
@@ -224,25 +192,21 @@ st :: proc(
 		text = text,
 	}
 	if result.text == "" {
-		// No style info added when text is empty.
 		return result, false
 	}
-	style := Style{}
+	parsed_style := Style{}
 
 	when ODIN_DEBUG {log.debugf("Parsing style string: '%s' for text: '%s'", style_string, text)}
 
-	// Each part will correspond to a lowercase text or color style
 	for part in parse_split(style_string, allocator = allocator) {
 		when ODIN_DEBUG {log.debugf("Processing style part: '%s'", part)}
 
-		// Check text_style first as most strings will be text_style
 		if text_styles, text_ok := style_map[part]; text_ok {
-			style.text_styles += {text_styles}
+			parsed_style.text_styles += {text_styles}
 			when ODIN_DEBUG {log.debugf("Successfully parsed text style: '%s'", part)}
 			continue
 		}
 
-		// Assume foreground color if not text_style
 		bg := false
 		color_str := part
 
@@ -257,13 +221,13 @@ st :: proc(
 			when ODIN_DEBUG {log.debugf("Checking color_str as fg: %s", color_str)}
 		}
 
-		if color, color_ok := parse_color(color_str, bg); color_ok {
+		if color, color_ok := parse_color(color_str); color_ok {
 			if bg {
 				when ODIN_DEBUG {log.debugf("Successfully parsed background color: '%s'", color_str)}
-				style.background_color = color
+				parsed_style.background_color = color
 			} else {
 				when ODIN_DEBUG {log.debugf("Successfully parsed foreground color: '%s'", color_str)}
-				style.foreground_color = color
+				parsed_style.foreground_color = color
 			}
 			continue
 		}
@@ -281,52 +245,36 @@ st :: proc(
 
 	when ODIN_DEBUG {log.debugf(
 			"Successfully created Styled_Text with %d text styles and fg:%t bg:%t",
-			card(style.text_styles),
-			style.foreground_color != nil,
-			style.background_color != nil,
+			card(parsed_style.text_styles),
+			parsed_style.foreground_color != nil,
+			parsed_style.background_color != nil,
 		)}
-	result.style = style
+	result.style = parsed_style
 	return result, true
 }
 
-// parse_color handles different color format inputs and returns a Colors.
-// It attempts to parse the input string as a named color, a hexadecimal color,
-// an RGB color (rgb(r,g,b)), a HSL color(hsl(h, s, l)) or an 8-bit color (color(n)).
-//
-// Inputs:
-//   color_str: The string representing the color.
-//   bg: A boolean flag indicating if the color should be parsed as a background color.
-//
-// Returns:
-//   Colors: The parsed color data. This can be an ANSI color code or RGB data.
-//   bool: True if the color string was successfully parsed, false otherwise.
-parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
-	// assert(all_lower(color_str))
+/*
+parse_color parses a color string into a Colors value. Tries named colors, hex, HSL, RGB,
+and 8-bit formats in order.
+
+Inputs:
+- color_str: A lowercase color string (e.g., "red", "#ff0000", "rgb(255,0,0)", "hsl(0,1,0.5)", "color(196)").
+
+Returns:
+- The parsed color value, or nil on failure.
+- true if the color was successfully parsed.
+*/
+parse_color :: proc(color_str: string) -> (Colors, bool) {
 	when ODIN_DEBUG {log.debugf("Parsing color string: '%s'", color_str)}
 
-	// Checking for unrecognized characters. Expect lowercase a-z, 0-9, parens, colon, period, comma, #, and space
 	if !all_valid(color_str) {
-		switch package_options.parsing {
-		case .Error:
-			log.errorf("Unable to parse color str: %s", color_str)
-		case .Warn:
-			log.warnf("Unable to parse color str: %s", color_str)
-		case .Ignore:
-		}
+		report("Unable to parse color str: %s", color_str)
 		return nil, false
 	}
 
-	// Try as named color
-	if bg {
-		if result, ok := bg_map[color_str]; ok {
-			when ODIN_DEBUG {log.debugf("Matched named background color: '%s'", color_str)}
-			return result, ok
-		}
-	} else {
-		if result, ok := fg_map[color_str]; ok {
-			when ODIN_DEBUG {log.debugf("Matched named foreground color: '%s'", color_str)}
-			return result, ok
-		}
+	if result, ok := color_map[color_str]; ok {
+		when ODIN_DEBUG {log.debugf("Matched named color: '%s'", color_str)}
+		return result, ok
 	}
 
 	// Try as hex color
@@ -335,16 +283,7 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
 			when ODIN_DEBUG {log.debugf("Successfully parsed hex color: '%s'", color_str)}
 			return result, ok
 		}
-		switch package_options.parsing {
-		case .Error:
-			log.errorf("Failed to parse as hex color: '%s'", color_str)
-		case .Warn:
-			log.warnf("Failed to parse as hex color: '%s'", color_str)
-		case .Ignore:
-			when ODIN_DEBUG {log.debugf("Failed to parse as hex color: '%s'", color_str)}
-		case:
-			invalid_parsing_enum_msg()
-		}
+		report("Failed to parse as hex color: '%s'", color_str)
 		return nil, false
 	}
 
@@ -354,16 +293,7 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
 		hsl_parts := strings.count(hsl_str, ",")
 
 		if hsl_parts != 2 {
-			switch package_options.parsing {
-			case .Error:
-				log.errorf("Invalid HSL format (wrong number of components): '%s'", color_str)
-			case .Warn:
-				log.warnf("Invalid HSL format (wrong number of components): '%s'", color_str)
-			case .Ignore:
-				when ODIN_DEBUG {log.debugf("Invalid HSL format (wrong number of components): '%s'", color_str)}
-			case:
-				invalid_parsing_enum_msg()
-			}
+			report("Invalid HSL format (wrong number of components): '%s'", color_str)
 			return nil, false
 		}
 
@@ -383,16 +313,7 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
 		}
 
 		if !h_ok || !s_ok || !l_ok {
-			switch package_options.parsing {
-			case .Error:
-				log.errorf("Failed to parse HSL components: '%s'", color_str)
-			case .Warn:
-				log.warnf("Failed to parse HSL components: '%s'", color_str)
-			case .Ignore:
-				when ODIN_DEBUG {log.debugf("Failed to parse HSL components: '%s'", color_str)}
-			case:
-				invalid_parsing_enum_msg()
-			}
+			report("Failed to parse HSL components: '%s'", color_str)
 			return nil, false
 		}
 
@@ -400,16 +321,7 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
 			when ODIN_DEBUG {log.debugf("Successfully parsed HSL color: hsl(%f,%f,%f)", h, s, l)}
 			return result, ok
 		} else {
-			switch package_options.parsing {
-			case .Error:
-				log.errorf("HSL values out of range: '%s'", color_str)
-			case .Warn:
-				log.warnf("HSL values out of range: '%s'", color_str)
-			case .Ignore:
-				when ODIN_DEBUG {log.debugf("HSL values out of range: '%s'", color_str)}
-			case:
-				invalid_parsing_enum_msg()
-			}
+			report("HSL values out of range: '%s'", color_str)
 			return nil, false
 		}
 	}
@@ -420,16 +332,7 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
 		rgb_parts := strings.count(rgb_str, ",")
 
 		if rgb_parts != 2 {
-			switch package_options.parsing {
-			case .Error:
-				log.errorf("Invalid RGB format (wrong number of components): '%s'", color_str)
-			case .Warn:
-				log.warnf("Invalid RGB format (wrong number of components): '%s'", color_str)
-			case .Ignore:
-				when ODIN_DEBUG {log.debugf("Invalid RGB format (wrong number of components): '%s'", color_str)}
-			case:
-				invalid_parsing_enum_msg()
-			}
+			report("Invalid RGB format (wrong number of components): '%s'", color_str)
 			return nil, false
 		}
 
@@ -449,29 +352,11 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
 		}
 
 		if !r_ok || !g_ok || !b_ok {
-			switch package_options.parsing {
-			case .Error:
-				log.errorf("Failed to parse RGB components: '%s'", color_str)
-			case .Warn:
-				log.warnf("Failed to parse RGB components: '%s'", color_str)
-			case .Ignore:
-				when ODIN_DEBUG {log.debugf("Failed to parse RGB components: '%s'", color_str)}
-			case:
-				invalid_parsing_enum_msg()
-			}
+			report("Failed to parse RGB components: '%s'", color_str)
 			return nil, false
 		}
 		if r > 255 || g > 255 || b > 255 {
-			switch package_options.parsing {
-			case .Error:
-				log.errorf("RGB values out of range: '%s'", color_str)
-			case .Warn:
-				log.warnf("RGB values out of range: '%s'", color_str)
-			case .Ignore:
-				when ODIN_DEBUG {log.debugf("RGB values out of range: '%s'", color_str)}
-			case:
-				invalid_parsing_enum_msg()
-			}
+			report("RGB values out of range: '%s'", color_str)
 			return nil, false
 		}
 
@@ -486,16 +371,7 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
 			when ODIN_DEBUG {log.debugf("Successfully parsed 8-bit color: %d", value)}
 			return EightBit(value), true
 		}
-		switch package_options.parsing {
-		case .Error:
-			log.errorf("Failed to parse 8-bit color value: '%s'", color_str)
-		case .Warn:
-			log.warnf("Failed to parse 8-bit color value: '%s'", color_str)
-		case .Ignore:
-			when ODIN_DEBUG {log.debugf("Failed to parse 8-bit color value: '%s'", num_str)}
-		case:
-			invalid_parsing_enum_msg()
-		}
+		report("Failed to parse 8-bit color value: '%s'", color_str)
 		return nil, false
 	}
 
@@ -505,45 +381,33 @@ parse_color :: proc(color_str: string, bg: bool = false) -> (Colors, bool) {
 }
 
 /*
-parse_split Splits a string on spaces while preserving spaces within parentheses.
+parse_split splits a style string on spaces while preserving content within parentheses.
+The input is lowercased before splitting.
 
 Inputs:
-	input: string - The input string to be split. Can contain nested parentheses
-									and spaces both inside and outside parentheses.
+- input: The style string to split.
+- allocator: (default: context.temp_allocator)
 
 Returns:
-	[]string - A slice containing the split string parts. Spaces outside parentheses
-						 are used as delimiters and removed. Content within parentheses,
-						 including spaces, is preserved intact as a single element.
+- A slice of the split tokens. Empty input returns an empty slice.
 
 Example:
-	input: "hello world (foo bar) baz"
-	returns: ["hello", "world", "(foo bar)", "baz"]
-
-Note:
-	- Empty input returns an empty slice
-	- Multiple consecutive spaces are treated as a single delimiter
-	- Handles nested parentheses correctly
-	- Doesn't handle unclosed parens
+	parse_split("bold fg:rgb(255, 0, 0) underline") => ["bold", "fg:rgb(255,0,0)", "underline"]
 */
 @(private)
 parse_split :: proc(input: string, allocator := context.temp_allocator) -> []string {
 	input := strings.to_lower(input, allocator = allocator)
 	result := make([dynamic]string, allocator = allocator)
 	if input == "" {
-		append(&result, "")
 		return result[:]
 	}
 	in_paren := false
-
-	// parsing_str := &input
 
 	temp_str := make([dynamic]string, 7, allocator = allocator)
 	for item in strings.fields_iterator(&input) {
 		if in_paren {
 			if n := strings.count(item, ")"); n > 0 {
 				if n > 1 || !strings.has_suffix(item, ")") {
-					// Split the string to try and fix it
 					when ODIN_DEBUG {log.debugf("Attempting to fix incorrect string: %s", item)}
 					fixed := strings.split_after_n(item, ")", 2, allocator)
 					append(&temp_str, fixed[0])
@@ -591,20 +455,14 @@ parse_split :: proc(input: string, allocator := context.temp_allocator) -> []str
 	return result[:]
 }
 
+// all_valid returns true if the string contains only valid style/color characters (a-z, 0-9, ():#.,  ).
 all_valid :: proc(str: string) -> bool {
 	for r in str {
 		switch r {
 		case 'a' ..= 'z', '0' ..= '9', '(', ')', ':', '#', '.', ',', ' ':
 			continue
 		case:
-			switch package_options.parsing {
-			case .Error:
-				log.errorf("Invalid text style component: '%v' from '%s'", r, str)
-			case .Warn:
-				log.warnf("Invalid text style component: '%v' from '%s'", r, str)
-			case .Ignore:
-				when ODIN_DEBUG {log.debugf("Invalid text style component: '%v' from '%s'", r, str)}
-			}
+			report("Invalid text style component: '%v' from '%s'", r, str)
 			return false
 		}
 	}
