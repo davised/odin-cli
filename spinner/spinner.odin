@@ -2,6 +2,7 @@
 package spinner
 
 import "core:io"
+import "core:mem"
 import "core:os"
 import "core:sync"
 import "core:thread"
@@ -18,6 +19,7 @@ Spinner :: struct {
   frames:      Spinner_Frames,
   message:     string,
   text_style:  Maybe(style.Style),
+  allocator:   mem.Allocator,
   _mutex:      sync.Mutex,           // guards message and _frame_idx
   _stop:       b32,                  // atomic stop flag
   _thread:     ^thread.Thread,
@@ -73,12 +75,14 @@ make_spinner :: proc(
   frames: Maybe(Spinner_Frames) = nil,
   message := "",
   text_style: Maybe(style.Style) = nil,
+  allocator := context.allocator,
 ) -> Spinner {
   f := frames.? or_else spinner_dots()
   return Spinner{
     frames     = f,
     message    = message,
     text_style = text_style,
+    allocator  = allocator,
     _stop      = false,
     _thread    = nil,
     _frame_idx = 0,
@@ -95,6 +99,8 @@ start :: proc(s: ^Spinner) {
   s._frame_idx = 0
   s._running = true
 
+  // Use the spinner's allocator for thread creation
+  context.allocator = s.allocator
   t := thread.create(_spinner_thread_proc)
   t.data = rawptr(s)
   s._thread = t
@@ -110,7 +116,7 @@ stop :: proc(s: ^Spinner, final_message := "") {
 
   if s._thread != nil {
     thread.join(s._thread)
-    thread.destroy(s._thread)
+    thread.destroy(s._thread)  // frees via thread.creation_allocator
     s._thread = nil
   }
 
