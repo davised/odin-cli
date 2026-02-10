@@ -5,15 +5,15 @@ import "core:unicode/utf8"
 ELLIPSIS :: "…"
 
 /* display_width returns the monospace terminal cell width of a string.
-   Handles CJK/fullwidth (2 cols), combining marks (0 cols), emoji, etc. */
+	 Handles CJK/fullwidth (2 cols), combining marks (0 cols), emoji, etc. */
 display_width :: proc(s: string) -> int {
 	_, _, w := utf8.grapheme_count(s)
 	return w
 }
 
 /* truncate truncates a string to fit within max_width display columns,
-   appending an ellipsis if truncation occurs. Returns the original string
-   when it fits or when max_width is 0 (unlimited). */
+	 appending an ellipsis if truncation occurs. Returns the original string
+	 when it fits or when max_width is 0 (unlimited). */
 truncate :: proc(s: string, max_width: int, allocator := context.temp_allocator) -> string {
 	if max_width <= 0 do return s
 
@@ -43,7 +43,7 @@ truncate :: proc(s: string, max_width: int, allocator := context.temp_allocator)
 }
 
 /* Iterator that yields lines of at most max_width display columns.
-   Each yielded line is a slice of the original string — zero allocation. */
+	 Each yielded line is a slice of the original string — zero allocation. */
 Wrap_Iterator :: struct {
 	s:         string,
 	max_width: int,
@@ -51,7 +51,7 @@ Wrap_Iterator :: struct {
 }
 
 /* wrap_iterator_make creates a Wrap_Iterator. If max_width <= 0, the
-   entire string is yielded as a single line (unlimited). */
+	 entire string is yielded as a single line (unlimited). */
 wrap_iterator_make :: proc(s: string, max_width: int) -> Wrap_Iterator {
 	return Wrap_Iterator{s = s, max_width = max_width}
 }

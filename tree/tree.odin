@@ -4,15 +4,15 @@ import style "../style"
 
 /* Content for a tree's root line — string or styled text (no recursive nesting). */
 Tree_Root :: union {
-  string,
-  style.Styled_Text,
+	string,
+	style.Styled_Text,
 }
 
 /* Content for tree children — can be leaf strings, styled text, or nested subtrees. */
 Tree_Item :: union {
-  string,
-  style.Styled_Text,
-  ^Tree,
+	string,
+	style.Styled_Text,
+	^Tree,
 }
 
 /*
@@ -22,17 +22,17 @@ When root is nil, children are rendered as a forest (no root line).
 The enumerator field allows per-subtree override of branch characters.
 */
 Tree :: struct {
-  root:       Tree_Root,
-  children:   []Tree_Item,
-  enumerator: ^Enumerator,
-  width:      int, // max display columns (0 = unlimited)
+	root:       Tree_Root,
+	children:   []Tree_Item,
+	enumerator: ^Enumerator,
+	width:      int, // max display columns (0 = unlimited)
 }
 
 /* Characters used to draw tree connectors.
-   All four fields must have the same display width for proper alignment. */
+	 All four fields must have the same display width for proper alignment. */
 Enumerator :: struct {
-  item:      string, // non-last child connector, e.g. "├── "
-  last_item: string, // last child connector,     e.g. "└── "
-  branch:    string, // continuing depth line,     e.g. "│   "
-  padding:   string, // spacing when no connector, e.g. "    "
+	item:      string, // non-last child connector, e.g. "├── "
+	last_item: string, // last child connector,     e.g. "└── "
+	branch:    string, // continuing depth line,     e.g. "│   "
+	padding:   string, // spacing when no connector, e.g. "    "
 }
