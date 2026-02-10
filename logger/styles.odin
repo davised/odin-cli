@@ -20,15 +20,15 @@ Key_Style :: struct {
 default_level_styles :: proc() -> [LEVEL_COUNT]Level_Style {
 	return {
 		// Debug: gray + bold
-		{prefix = "DEBU", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_FG.Bright_Black}},
+		{prefix = "DEBU", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Bright_Black}},
 		// Info: blue + bold
-		{prefix = "INFO", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_FG.Blue}},
+		{prefix = "INFO", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Blue}},
 		// Warning: yellow + bold
-		{prefix = "WARN", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_FG.Yellow}},
+		{prefix = "WARN", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Yellow}},
 		// Error: red + bold
-		{prefix = "ERRO", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_FG.Red}},
+		{prefix = "ERRO", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Red}},
 		// Fatal: bright red + bold
-		{prefix = "FATA", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_FG.Bright_Red}},
+		{prefix = "FATA", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Bright_Red}},
 	}
 }
 
@@ -40,9 +40,9 @@ plain_level_styles :: proc() -> [LEVEL_COUNT]Level_Style {
 /* default_key_style returns key=value styling: cyan+faint keys, gray separator, unstyled values. */
 default_key_style :: proc() -> Key_Style {
 	return Key_Style {
-		key_style = {text_styles = {.Faint}, foreground_color = style.ANSI_FG.Cyan},
+		key_style = {text_styles = {.Faint}, foreground_color = style.ANSI_Color.Cyan},
 		separator = "=",
-		separator_style = {foreground_color = style.ANSI_FG.Bright_Black},
+		separator_style = {foreground_color = style.ANSI_Color.Bright_Black},
 	}
 }
 
@@ -53,7 +53,7 @@ plain_key_style :: proc() -> Key_Style {
 
 /* default_timestamp_style returns gray timestamp styling. */
 default_timestamp_style :: proc() -> style.Style {
-	return style.Style{foreground_color = style.ANSI_FG.Bright_Black}
+	return style.Style{foreground_color = style.ANSI_Color.Bright_Black}
 }
 
 /* default_caller_style returns faint caller location styling. */
