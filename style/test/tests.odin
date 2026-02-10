@@ -214,7 +214,7 @@ test_st :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_fg_color_to_sb :: proc(t: ^testing.T) {
+test_fg_color_to_writer :: proc(t: ^testing.T) {
     test_cases := []struct {
         color:          style.Colors,
         expected_output: string,
@@ -229,7 +229,8 @@ test_fg_color_to_sb :: proc(t: ^testing.T) {
 
     for test_case in test_cases {
         sb := strings.builder_make()
-        style.fg_color_to_sb(test_case.color, &sb)
+        n := 0
+        style.fg_color_to_writer(strings.to_writer(&sb), test_case.color, &n)
         output := strings.to_string(sb)
         testing.expect_value(t, output, test_case.expected_output)
         strings.builder_destroy(&sb)
@@ -237,7 +238,7 @@ test_fg_color_to_sb :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_bg_color_to_sb :: proc(t: ^testing.T) {
+test_bg_color_to_writer :: proc(t: ^testing.T) {
     test_cases := []struct {
         color:          style.Colors,
         expected_output: string,
@@ -252,7 +253,8 @@ test_bg_color_to_sb :: proc(t: ^testing.T) {
 
     for test_case in test_cases {
         sb := strings.builder_make()
-        style.bg_color_to_sb(test_case.color, &sb)
+        n := 0
+        style.bg_color_to_writer(strings.to_writer(&sb), test_case.color, &n)
         output := strings.to_string(sb)
         testing.expect_value(t, output, test_case.expected_output)
         strings.builder_destroy(&sb)
@@ -260,13 +262,13 @@ test_bg_color_to_sb :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_text_styles_to_sb :: proc(t: ^testing.T) {
+test_text_styles_to_writer :: proc(t: ^testing.T) {
     test_cases := []struct {
         styles:          style.Text_Style_Set,
         expected_output: string,
     }{
         {{style.Text_Style.Bold}, "\x1b[1m"},
-        {{style.Text_Style.Italic, style.Text_Style.Underline}, "\x1b[3m\x1b[4m"},
+        {{style.Text_Style.Italic, style.Text_Style.Underline}, "\x1b[3;4m"},
         {
             {
                 style.Text_Style.Bold,
@@ -278,7 +280,7 @@ test_text_styles_to_sb :: proc(t: ^testing.T) {
                 style.Text_Style.Hide,
                 style.Text_Style.Strike,
             },
-            "\x1b[1m\x1b[3m\x1b[4m\x1b[5m\x1b[6m\x1b[7m\x1b[8m\x1b[9m",
+            "\x1b[1;3;4;5;6;7;8;9m",
         },
     }
 
@@ -286,7 +288,8 @@ test_text_styles_to_sb :: proc(t: ^testing.T) {
 
     for test_case in test_cases {
         sb := strings.builder_make()
-        style.text_styles_to_sb(test_case.styles, &sb)
+        n := 0
+        style.text_styles_to_writer(strings.to_writer(&sb), test_case.styles, &n)
         output := strings.to_string(sb)
         testing.expect_value(t, output, test_case.expected_output)
         strings.builder_destroy(&sb)
@@ -294,21 +297,21 @@ test_text_styles_to_sb :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_text_to_sb :: proc(t: ^testing.T) {
+test_text_to_writer :: proc(t: ^testing.T) {
     test_cases := []struct {
-        styled_text:     style.Styled_Text,
+        text:            style.Text,
         expected_output: string,
     }{
-        {style.Styled_Text{text = auto_cast "hello"}, "hello\x1b[0m"},
-        {style.Styled_Text{text = auto_cast "world",
-                               style = style.Style{foreground_color = style.ANSI_FG.Red}}, "world\x1b[0m"},
+        {"hello", "hello\x1b[0m"},
+        {"world", "world\x1b[0m"},
     }
 
     testing.set_fail_timeout(t, 5 * time.Second)
 
     for test_case in test_cases {
         sb := strings.builder_make()
-        style.text_to_sb(test_case.styled_text.text, &sb)
+        n := 0
+        style.text_to_writer(strings.to_writer(&sb), test_case.text, &n)
         output := strings.to_string(sb)
         testing.expect_value(t, output, test_case.expected_output)
         strings.builder_destroy(&sb)
@@ -340,7 +343,7 @@ test_to_str :: proc(t: ^testing.T) {
                     background_color = style.EightBit(123),
                 },
             },
-            "\x1b[3m\x1b[4m\x1b[38;2;0;255;0m\x1b[48;5;123mworld\x1b[0m",
+            "\x1b[3;4m\x1b[38;2;0;255;0m\x1b[48;5;123mworld\x1b[0m",
         },
     }
 
@@ -348,9 +351,9 @@ test_to_str :: proc(t: ^testing.T) {
 
     for test_case in test_cases {
         output, ok := style.to_str(test_case.styled_text)
+        defer delete(output)
 
         testing.expect_value(t, output, test_case.expected_output)
-        free_all(context.temp_allocator)
     }
 }
 
@@ -379,7 +382,7 @@ test_Styled_Text_Formatter :: proc(t: ^testing.T) {
                     background_color = style.EightBit(123),
                 },
             },
-            "\x1b[3m\x1b[4m\x1b[38;2;0;255;0m\x1b[48;5;123mworld\x1b[0m",
+            "\x1b[3;4m\x1b[38;2;0;255;0m\x1b[48;5;123mworld\x1b[0m",
         },
         {
             style.Styled_Text{
