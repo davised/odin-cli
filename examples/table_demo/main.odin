@@ -1,9 +1,9 @@
-package demo
+package table_demo
 
 import "core:fmt"
-import "table"
-import "term"
-import "style"
+import table "../../table"
+import term "../../term"
+import style "../../style"
 
 main :: proc() {
 	width := 80

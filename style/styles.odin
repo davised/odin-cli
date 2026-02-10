@@ -1,11 +1,6 @@
 #+feature using-stmt
 package style
 
-import "core:fmt"
-import "core:log"
-import "core:strings"
-import "core:terminal/ansi"
-
 // Text_Style represents the various text style attributes.
 Text_Style :: enum {
 	None,

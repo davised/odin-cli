@@ -18,24 +18,11 @@ Options :: struct {
 	parsing: OnError,
 }
 
-package_options: ^Options
+package_options: Options = Options{parsing = .Warn}
 
 // set_options sets the package-level formatting options.
-//
-// Inputs:
-//   opts: The Options struct containing the desired formatting settings.
 set_options :: proc(opts: ^Options) {
 	package_options.parsing = opts.parsing
-}
-
-@(private = "file")
-@(init)
-init_options :: proc() {
-	default_options := Options {
-		parsing = OnError.Warn,
-	}
-
-	package_options = &default_options
 }
 
 invalid_parsing_enum_msg :: proc() {
