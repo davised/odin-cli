@@ -1,7 +1,8 @@
+#+feature using-stmt
 package style
 
 import "core:strings"
-import "core:encoding/ansi"
+import "core:terminal/ansi"
 import "core:log"
 import "core:fmt"
 

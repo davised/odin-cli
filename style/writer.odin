@@ -1,7 +1,9 @@
+#+feature global-context
+#+feature using-stmt
 package style
 
 import "core:fmt"
-import "core:encoding/ansi"
+import "core:terminal/ansi"
 import "core:strings"
 import "core:log"
 import "core:io"
@@ -14,10 +16,12 @@ Enables use of println and other default-format printers.
 @(private="file")
 @(init)
 init_formatter :: proc() {
-  fmt.set_user_formatters(new(map[typeid]fmt.User_Formatter))
+  if fmt._user_formatters == nil {
+    fmt.set_user_formatters(new(map[typeid]fmt.User_Formatter))
+  }
 
   // Register the custom formatter for Styled_Text
-  err := fmt.register_user_formatter(type_info_of(Styled_Text).id, Styled_Text_Formatter)
+  fmt.register_user_formatter(type_info_of(Styled_Text).id, Styled_Text_Formatter)
 }
 
 /*
