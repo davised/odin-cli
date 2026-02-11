@@ -94,8 +94,19 @@ extract_unknown_flag :: proc(message: string) -> string {
 }
 
 // find_suggestion finds the closest matching flag name using Levenshtein distance.
+// Also checks short flag names for single-character unknowns.
 @(private = "file")
 find_suggestion :: proc(unknown: string, all_flags: []Flag_Info) -> (string, bool) {
+	// Single-character unknown: check if it matches a short flag name.
+	if len(unknown) == 1 {
+		for f in all_flags {
+			if f.is_hidden do continue
+			if f.short_name == unknown {
+				return f.display_name, true
+			}
+		}
+	}
+
 	best_name: string
 	best_dist := max(int)
 	threshold := max(3, len(unknown) / 2)
@@ -106,6 +117,14 @@ find_suggestion :: proc(unknown: string, all_flags: []Flag_Info) -> (string, boo
 		if dist < best_dist {
 			best_dist = dist
 			best_name = f.display_name
+		}
+		// Also compare against short names.
+		if len(f.short_name) > 0 {
+			dist = levenshtein(unknown, f.short_name)
+			if dist < best_dist {
+				best_dist = dist
+				best_name = f.display_name // suggest the long name
+			}
 		}
 	}
 

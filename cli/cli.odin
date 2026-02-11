@@ -7,6 +7,8 @@ import "core:fmt"
 import "core:io"
 import "core:os"
 import "core:path/filepath"
+import "core:reflect"
+import "core:strings"
 
 // Panel defines a named group of flags for organized help output.
 Panel :: struct {
@@ -32,21 +34,30 @@ Command :: struct {
 	aliases:      []string,
 	panel_config: []Panel,
 	hidden:       bool,
-	_run_proc:    _Run_Proc,
-	_action_ptr:  rawptr,
-	_flags_type:  typeid,
+	subcommands:  [dynamic]Command,
+	_run_proc:       _Run_Proc,
+	_action_ptr:     rawptr,
+	_validator_ptr:  rawptr,
+	_flags_type:     typeid,
 }
+
+// _Global_Parse_Proc is the type-erased proc for parsing global flags.
+@(private = "file")
+_Global_Parse_Proc :: #type proc(rawptr, []string, flags.Parsing_Style) -> flags.Error
 
 // App is the top-level multi-command application.
 App :: struct {
-	name:          string,
-	version:       string,
-	description:   string,
-	commands:      [dynamic]Command,
-	theme:         Theme,
-	parsing_style: flags.Parsing_Style,
-	max_width:     int,
-	allocator:     runtime.Allocator,
+	name:                string,
+	version:             string,
+	description:         string,
+	commands:            [dynamic]Command,
+	theme:               Theme,
+	parsing_style:       flags.Parsing_Style,
+	max_width:           int,
+	allocator:           runtime.Allocator,
+	_global_flags_type:  typeid,
+	_global_flags_ptr:   rawptr,
+	_global_parse_proc:  _Global_Parse_Proc,
 }
 
 // make_app creates a new App. Call destroy_app when done.
@@ -71,9 +82,31 @@ make_app :: proc(
 	}
 }
 
+// set_global_flags registers a global flags struct with the App.
+// Global flags are parsed from top-level args before command dispatch.
+set_global_flags :: proc(app: ^App, $T: typeid, model: ^T) {
+	app._global_flags_type = T
+	app._global_flags_ptr = model
+	app._global_parse_proc = proc(ptr: rawptr, args: []string, style: flags.Parsing_Style) -> flags.Error {
+		return flags.parse((^T)(ptr), args, style)
+	}
+}
+
 // destroy_app frees resources owned by the App.
 destroy_app :: proc(app: ^App) {
+	destroy_commands(app.commands[:])
 	delete(app.commands)
+}
+
+// destroy_commands recursively frees subcommand dynamic arrays.
+@(private = "file")
+destroy_commands :: proc(commands: []Command) {
+	for &cmd in commands {
+		if len(cmd.subcommands) > 0 {
+			destroy_commands(cmd.subcommands[:])
+			delete(cmd.subcommands)
+		}
+	}
 }
 
 // add_command registers a subcommand. The action proc receives parsed flags
@@ -89,46 +122,226 @@ add_command :: proc(
 	panel_config: []Panel = nil,
 	hidden: bool = false,
 ) {
-	// Monomorphized runner — Flags_Type is known at compile time here.
+	append(&app.commands, Command {
+		name           = name,
+		description    = description,
+		aliases        = aliases,
+		panel_config   = panel_config,
+		hidden         = hidden,
+		_run_proc      = make_runner(Flags_Type),
+		_action_ptr    = transmute(rawptr)action,
+		_flags_type    = Flags_Type,
+		subcommands    = make([dynamic]Command, app.allocator),
+	})
+}
+
+// set_validator registers a custom validator for a command.
+// The validator returns "" for success, or an error message string.
+set_validator :: proc(app: ^App, command_name: string, $Flags_Type: typeid, validator: proc(flags_val: ^Flags_Type) -> string) {
+	cmd := find_command(app.commands[:], command_name)
+	assert(cmd != nil, fmt.tprintf("Command '%s' not found", command_name))
+	cmd._validator_ptr = transmute(rawptr)validator
+}
+
+// add_subcommand registers a nested command under a parent.
+// parent_path is a slash-separated path: "deploy" or "deploy/config".
+add_subcommand :: proc(
+	app: ^App,
+	$Flags_Type: typeid,
+	parent_path: string,
+	name: string,
+	description: string = "",
+	action: proc(flags_val: ^Flags_Type, program: string) -> int = nil,
+	aliases: []string = nil,
+	panel_config: []Panel = nil,
+	hidden: bool = false,
+) {
+	parent := find_command_by_path(app, parent_path)
+	assert(parent != nil, fmt.tprintf("Parent command '%s' not found", parent_path))
+
+	append(&parent.subcommands, Command {
+		name           = name,
+		description    = description,
+		aliases        = aliases,
+		panel_config   = panel_config,
+		hidden         = hidden,
+		_run_proc      = make_runner(Flags_Type),
+		_action_ptr    = transmute(rawptr)action,
+		_flags_type    = Flags_Type,
+		subcommands    = make([dynamic]Command, app.allocator),
+	})
+}
+
+// set_subcommand_validator registers a custom validator for a nested command.
+// parent_path is a slash-separated path to the parent, name is the subcommand name.
+set_subcommand_validator :: proc(app: ^App, parent_path: string, name: string, $Flags_Type: typeid, validator: proc(flags_val: ^Flags_Type) -> string) {
+	parent := find_command_by_path(app, parent_path)
+	assert(parent != nil, fmt.tprintf("Parent command '%s' not found", parent_path))
+	cmd := find_command(parent.subcommands[:], name)
+	assert(cmd != nil, fmt.tprintf("Subcommand '%s' not found under '%s'", name, parent_path))
+	cmd._validator_ptr = transmute(rawptr)validator
+}
+
+// find_command finds a command by name or alias in a command list.
+@(private = "file")
+find_command :: proc(commands: []Command, name: string) -> ^Command {
+	for &c in commands {
+		if c.name == name do return &c
+		for alias in c.aliases {
+			if alias == name do return &c
+		}
+	}
+	return nil
+}
+
+// find_command_by_path finds a command by slash-separated path, e.g. "deploy/config".
+// Supports aliases at each level.
+@(private = "file")
+find_command_by_path :: proc(app: ^App, path: string) -> ^Command {
+	path := path
+	segments := make([dynamic]string, 0, 4, context.temp_allocator)
+	for segment in strings.split_iterator(&path, "/") {
+		append(&segments, segment)
+	}
+	if len(segments) == 0 do return nil
+
+	cmd := find_command(app.commands[:], segments[0])
+	if cmd == nil do return nil
+
+	for i := 1; i < len(segments); i += 1 {
+		cmd = find_command(cmd.subcommands[:], segments[i])
+		if cmd == nil do return nil
+	}
+
+	return cmd
+}
+
+// make_runner creates a monomorphized runner proc for a given Flags_Type.
+@(private = "file")
+make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 	runner :: proc(cmd: ^Command, args: []string, program: string, app: ^App, mode: term.Render_Mode) -> int {
+		all_flags := extract_flags(Flags_Type)
+		stdout := os.stream_from_handle(os.stdout)
+		stderr := os.stream_from_handle(os.stderr)
+
+		// Extract and parse global flags if configured.
+		cmd_args := args
+		global_infos: []Flag_Info
+		if app._global_parse_proc != nil {
+			global_infos = extract_flags(app._global_flags_type)
+			remaining, g_ok := parse_global_flags(app, args, global_infos, stderr, program, mode)
+			if !g_ok do return 1
+			cmd_args = remaining
+		}
+
+		// Check for nested subcommand dispatch.
+		if len(cmd.subcommands) > 0 && len(cmd_args) > 0 {
+			first := cmd_args[0]
+			is_flag := len(first) > 0 && first[0] == '-'
+			if !is_flag {
+				code, dispatched := dispatch_subcommand(cmd.subcommands[:], cmd_args, program, app, mode)
+				if dispatched do return code
+				// Not a known subcommand — fall through to parse as flags.
+			}
+		}
+
 		// Greedy: intercept --help before parsing so it works even with invalid flags.
-		if is_help_flag(args, app.parsing_style) {
-			stdout := os.stream_from_handle(os.stdout)
+		if is_help_flag(cmd_args, app.parsing_style) {
+			defaults: Flags_Type
 			write_help(
 				stdout, Flags_Type, program, app.parsing_style,
-				nil, cmd.panel_config, app.theme,
+				cmd.subcommands[:] if len(cmd.subcommands) > 0 else nil,
+				cmd.panel_config, app.theme,
 				cmd.description, "", app.max_width, mode,
+				defaults = &defaults,
+				global_flags = global_infos,
+				global_defaults = app._global_flags_ptr,
+				global_type = app._global_flags_type,
 			)
 			return 0
 		}
 
+		// Check for user-defined greedy flags.
+		if greedy_field, found := find_greedy_flag(cmd_args, all_flags, app.parsing_style); found {
+			model: Flags_Type
+			set_bool_field(&model, Flags_Type, greedy_field, true)
+			if cmd._action_ptr != nil {
+				action_proc := transmute(proc(^Flags_Type, string) -> int)cmd._action_ptr
+				return action_proc(&model, program)
+			}
+			return 0
+		}
+
+		// Run preprocessing pipeline (short flags, env vars, negatable booleans).
+		processed_args, preprocess_result := preprocess_args(cmd_args, all_flags, app.parsing_style)
+
 		model: Flags_Type
-		error := flags.parse(&model, args, app.parsing_style)
+		error := flags.parse(&model, processed_args, app.parsing_style)
 		if error != nil {
-			stderr := os.stream_from_handle(os.stderr)
 			write_error(stderr, Flags_Type, error, program, app.parsing_style, app.theme, mode)
 			return 1
+		}
+
+		// Apply count flags post-parse.
+		if len(preprocess_result.counts) > 0 {
+			apply_counts(&model, Flags_Type, preprocess_result.counts)
+		}
+
+		// XOR group validation.
+		if xor_err := validate_xor_groups(&model, Flags_Type, all_flags); len(xor_err) > 0 {
+			write_validation_error(stderr, xor_err, program, app.parsing_style, app.theme, mode)
+			return 1
+		}
+
+		// Custom validator.
+		if cmd._validator_ptr != nil {
+			validator_proc := transmute(proc(^Flags_Type) -> string)cmd._validator_ptr
+			if val_err := validator_proc(&model); len(val_err) > 0 {
+				write_validation_error(stderr, val_err, program, app.parsing_style, app.theme, mode)
+				return 1
+			}
 		}
 
 		if cmd._action_ptr != nil {
 			action_proc := transmute(proc(^Flags_Type, string) -> int)cmd._action_ptr
 			return action_proc(&model, program)
 		}
+
+		// No action and has subcommands — show help.
+		if len(cmd.subcommands) > 0 {
+			defaults: Flags_Type
+			write_help(
+				stdout, Flags_Type, program, app.parsing_style,
+				cmd.subcommands[:], cmd.panel_config, app.theme,
+				cmd.description, "", app.max_width, mode,
+				defaults = &defaults,
+				global_flags = global_infos,
+				global_defaults = app._global_flags_ptr,
+				global_type = app._global_flags_type,
+			)
+			return 1
+		}
 		return 0
 	}
+	return runner
+}
 
-	cmd := Command {
-		name         = name,
-		description  = description,
-		aliases      = aliases,
-		panel_config = panel_config,
-		hidden       = hidden,
-		_run_proc    = runner,
-		_action_ptr  = transmute(rawptr)action,
-		_flags_type  = Flags_Type,
-	}
+// dispatch_subcommand tries to match the first arg against subcommands.
+// Returns (exit_code, true) if dispatched, (0, false) if no match.
+@(private = "file")
+dispatch_subcommand :: proc(
+	commands: []Command,
+	args: []string,
+	program: string,
+	app: ^App,
+	mode: term.Render_Mode,
+) -> (int, bool) {
+	c := find_command(commands, args[0])
+	if c == nil do return 0, false
 
-	append(&app.commands, cmd)
+	cmd_program := fmt.tprintf("%s %s", program, c.name)
+	cmd_args := args[1:] if len(args) > 1 else nil
+	return c._run_proc(c, cmd_args, cmd_program, app, mode), true
 }
 
 // run dispatches to the appropriate subcommand based on program_args.
@@ -145,50 +358,70 @@ run :: proc(app: ^App, program_args: []string) -> int {
 
 	Empty :: struct {}
 
+	// Resolve global flags info for help rendering.
+	global_infos: []Flag_Info
+	if app._global_parse_proc != nil {
+		global_infos = extract_flags(app._global_flags_type)
+	}
+
 	// No args: show app help with error exit.
 	if len(args) == 0 {
 		write_help(
 			stdout, Empty, program, app.parsing_style,
 			app.commands[:], nil, app.theme,
 			app.description, app.version, app.max_width, mode,
+			global_flags = global_infos,
+			global_defaults = app._global_flags_ptr,
+			global_type = app._global_flags_type,
 		)
 		return 1
 	}
 
+	// Extract global args before checking flags/commands.
+	remaining_args := args
+	if app._global_parse_proc != nil && len(global_infos) > 0 {
+		remaining, g_ok := parse_global_flags(app, args, global_infos, stderr, program, mode)
+		if !g_ok do return 1
+		remaining_args = remaining
+	}
+
 	// Top-level --help / -h (only if the first arg is a flag, not a command).
-	first := args[0]
+	first := remaining_args[0] if len(remaining_args) > 0 else ""
 	is_flag := len(first) > 0 && first[0] == '-'
-	if is_flag && is_help_flag(args, app.parsing_style) {
+	if is_flag && is_help_flag(remaining_args, app.parsing_style) {
 		write_help(
 			stdout, Empty, program, app.parsing_style,
 			app.commands[:], nil, app.theme,
 			app.description, app.version, app.max_width, mode,
+			global_flags = global_infos,
+			global_defaults = app._global_flags_ptr,
+			global_type = app._global_flags_type,
 		)
 		return 0
 	}
 
 	// Check for --version.
-	if is_flag && len(app.version) > 0 && is_version_flag(args, app.parsing_style) {
+	if is_flag && len(app.version) > 0 && is_version_flag(remaining_args, app.parsing_style) {
 		fmt.wprintfln(stdout, "%s %s", app.name, app.version)
 		return 0
 	}
 
-	// Find matching command.
-	cmd_name := args[0]
-	cmd: ^Command
-	for &c in app.commands {
-		if c.name == cmd_name {
-			cmd = &c
-			break
-		}
-		for alias in c.aliases {
-			if alias == cmd_name {
-				cmd = &c
-				break
-			}
-		}
-		if cmd != nil do break
+	// Handle no remaining args after global extraction.
+	if len(remaining_args) == 0 {
+		write_help(
+			stdout, Empty, program, app.parsing_style,
+			app.commands[:], nil, app.theme,
+			app.description, app.version, app.max_width, mode,
+			global_flags = global_infos,
+			global_defaults = app._global_flags_ptr,
+			global_type = app._global_flags_type,
+		)
+		return 1
 	}
+
+	// Find matching command.
+	cmd_name := remaining_args[0]
+	cmd := find_command(app.commands[:], cmd_name)
 
 	if cmd == nil {
 		write_styled(stderr, "Error: ", app.theme.error_style, mode, nil)
@@ -206,7 +439,7 @@ run :: proc(app: ^App, program_args: []string) -> int {
 
 	// Dispatch to command.
 	cmd_program := fmt.tprintf("%s %s", program, cmd.name)
-	cmd_args := args[1:] if len(args) > 1 else nil
+	cmd_args := remaining_args[1:] if len(remaining_args) > 1 else nil
 
 	return cmd._run_proc(cmd, cmd_args, cmd_program, app, mode)
 }
@@ -221,6 +454,7 @@ parse_or_exit :: proc(
 	version: string = "",
 	theme_override: Maybe(Theme) = nil,
 	mode: Maybe(term.Render_Mode) = nil,
+	validator: proc(flags_val: ^T) -> string = nil,
 ) {
 	assert(len(program_args) > 0, "Program arguments slice is empty.")
 
@@ -231,15 +465,18 @@ parse_or_exit :: proc(
 	}
 
 	resolved_mode := resolve_mode(mode)
+	all_flags := extract_flags(T)
 
 	// Greedy: intercept --help and --version before parsing, so they
 	// work even alongside invalid flags (e.g. `myapp --bad --help`).
 	if is_help_flag(args, parsing_style) {
 		stdout := os.stream_from_handle(os.stdout)
+		defaults: T
 		write_help(
 			stdout, T, program, parsing_style,
 			nil, panel_config, theme_override,
 			description, version, 0, resolved_mode,
+			defaults = &defaults,
 		)
 		os.exit(0)
 	}
@@ -249,13 +486,456 @@ parse_or_exit :: proc(
 		os.exit(0)
 	}
 
-	error := flags.parse(model, args, parsing_style)
-	if error == nil do return
+	// Check for user-defined greedy flags.
+	if greedy_field, found := find_greedy_flag(args, all_flags, parsing_style); found {
+		set_bool_field(model, T, greedy_field, true)
+		return
+	}
 
-	// Parse error.
-	stderr := os.stream_from_handle(os.stderr)
-	write_error(stderr, T, error, program, parsing_style, theme_override, resolved_mode)
-	os.exit(1)
+	// Run preprocessing pipeline (short flags, env vars, negatable booleans).
+	processed_args, preprocess_result := preprocess_args(args, all_flags, parsing_style)
+
+	error := flags.parse(model, processed_args, parsing_style)
+	if error != nil {
+		stderr := os.stream_from_handle(os.stderr)
+		write_error(stderr, T, error, program, parsing_style, theme_override, resolved_mode)
+		os.exit(1)
+	}
+
+	// Apply count flags post-parse.
+	if len(preprocess_result.counts) > 0 {
+		apply_counts(model, T, preprocess_result.counts)
+	}
+
+	// XOR group validation.
+	if xor_err := validate_xor_groups(model, T, all_flags); len(xor_err) > 0 {
+		stderr := os.stream_from_handle(os.stderr)
+		theme := theme_override.? or_else default_theme()
+		write_validation_error(stderr, xor_err, program, parsing_style, theme, resolved_mode)
+		os.exit(1)
+	}
+
+	// Custom validator.
+	if validator != nil {
+		if val_err := validator(model); len(val_err) > 0 {
+			stderr := os.stream_from_handle(os.stderr)
+			theme := theme_override.? or_else default_theme()
+			write_validation_error(stderr, val_err, program, parsing_style, theme, resolved_mode)
+			os.exit(1)
+		}
+	}
+}
+
+// Preprocess_Result holds the output of short flag preprocessing.
+Preprocess_Result :: struct {
+	args:   []string,       // rewritten args for flags.parse
+	counts: map[string]int, // field_name → count (for count flags)
+}
+
+// preprocess_short_flags rewrites short flags to their long equivalents.
+// -v → --verbose, -v=val → --verbose=val, -o val → --output val
+// -vvv → counts["verbose"] = 3 for count flags
+preprocess_short_flags :: proc(args: []string, flag_infos: []Flag_Info) -> Preprocess_Result {
+	// Build short_char → Flag_Info lookup.
+	short_map := make(map[byte]Flag_Info, allocator = context.temp_allocator)
+	for fi in flag_infos {
+		if len(fi.short_name) > 0 {
+			short_map[fi.short_name[0]] = fi
+		}
+	}
+
+	if len(short_map) == 0 {
+		return {args = args}
+	}
+
+	result := make([dynamic]string, 0, len(args), context.temp_allocator)
+	counts := make(map[string]int, allocator = context.temp_allocator)
+
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+
+		// Skip if not a short flag, or if it's a long flag (--).
+		if len(arg) < 2 || arg[0] != '-' || arg[1] == '-' {
+			append(&result, arg)
+			i += 1
+			continue
+		}
+
+		// Handle -X=value form (single char only, e.g. -o=file).
+		if len(arg) > 3 && arg[2] == '=' {
+			short_char := arg[1]
+			if fi, ok := short_map[short_char]; ok {
+				append(&result, fmt.tprintf("--%s=%s", fi.display_name, arg[3:]))
+			} else {
+				append(&result, arg) // unknown, pass through
+			}
+			i += 1
+			continue
+		}
+
+		// Walk characters after the '-'.
+		chars := arg[1:]
+		j := 0
+		unknown := false
+		for j < len(chars) {
+			ch := chars[j]
+			fi, ok := short_map[ch]
+			if !ok {
+				// Unknown short flag — pass original arg through.
+				append(&result, arg)
+				unknown = true
+				break
+			}
+
+			if fi.is_count {
+				counts[fi.field_name] = (counts[fi.field_name] or_else 0) + 1
+				j += 1
+			} else if fi.is_boolean {
+				append(&result, fmt.tprintf("--%s", fi.display_name))
+				j += 1
+			} else {
+				// Value flag: consume rest of chars as value, or next arg.
+				append(&result, fmt.tprintf("--%s", fi.display_name))
+				rest := chars[j + 1:]
+				if len(rest) > 0 {
+					// -ofoo → --output=foo
+					append(&result, string(rest))
+				} else if i + 1 < len(args) {
+					// -o foo → --output foo
+					i += 1
+					append(&result, args[i])
+				}
+				j = len(chars) // done with this arg
+			}
+		}
+
+		i += 1
+	}
+
+	return {args = result[:], counts = counts}
+}
+
+// preprocess_args runs the full preprocessing pipeline: short flag expansion,
+// env var injection, and negatable boolean rewriting. Returns the processed
+// args and any count flag accumulations.
+@(private = "file")
+preprocess_args :: proc(args: []string, flag_infos: []Flag_Info, parsing_style: flags.Parsing_Style) -> (processed: []string, result: Preprocess_Result) {
+	if parsing_style != .Unix {
+		return args, {}
+	}
+	result = preprocess_short_flags(args, flag_infos)
+	processed = preprocess_env_vars(result.args, flag_infos, parsing_style)
+	processed = preprocess_negatable_booleans(processed, flag_infos)
+	return
+}
+
+// preprocess_env_vars injects env var values for flags not already in args.
+@(private = "file")
+preprocess_env_vars :: proc(args: []string, flag_infos: []Flag_Info, parsing_style: flags.Parsing_Style) -> []string {
+	prefix := flag_prefix_for_style(parsing_style)
+
+	// Collect flags with env vars.
+	env_flags := make([dynamic]Flag_Info, 0, len(flag_infos), context.temp_allocator)
+	for fi in flag_infos {
+		if len(fi.env_var) > 0 {
+			append(&env_flags, fi)
+		}
+	}
+	if len(env_flags) == 0 do return args
+
+	// Check which flags are already present in args.
+	present := make(map[string]bool, allocator = context.temp_allocator)
+	for arg in args {
+		for fi in env_flags {
+			long_flag := fmt.tprintf("%s%s", prefix, fi.display_name)
+			if arg == long_flag || strings.has_prefix(arg, fmt.tprintf("%s=", long_flag)) {
+				present[fi.field_name] = true
+			}
+		}
+	}
+
+	// Prepend env var values for missing flags.
+	env_args := make([dynamic]string, 0, len(env_flags), context.temp_allocator)
+	for fi in env_flags {
+		if fi.field_name in present do continue
+		if val, found := os.lookup_env(fi.env_var, context.temp_allocator); found {
+			if fi.is_boolean {
+				// For booleans, only inject if truthy.
+				lower := strings.to_lower(val, context.temp_allocator)
+				if lower == "1" || lower == "true" || lower == "yes" {
+					append(&env_args, fmt.tprintf("%s%s", prefix, fi.display_name))
+				}
+			} else {
+				append(&env_args, fmt.tprintf("%s%s=%s", prefix, fi.display_name, val))
+			}
+		}
+	}
+
+	if len(env_args) == 0 do return args
+
+	// Combine: env-derived args + original CLI args.
+	combined := make([dynamic]string, 0, len(env_args) + len(args), context.temp_allocator)
+	append(&combined, ..env_args[:])
+	append(&combined, ..args)
+	return combined[:]
+}
+
+// parse_global_flags extracts global args from the input, preprocesses and parses them.
+// Returns the remaining (non-global) args. On parse error, writes the error and returns ok=false.
+@(private = "file")
+parse_global_flags :: proc(
+	app: ^App,
+	args: []string,
+	global_infos: []Flag_Info,
+	stderr: io.Writer,
+	program: string,
+	mode: term.Render_Mode,
+) -> (remaining: []string, ok: bool) {
+	global_extracted, remaining_args := extract_global_args(args, global_infos, app.parsing_style)
+	if len(global_extracted) > 0 {
+		global_processed, _ := preprocess_args(global_extracted, global_infos, app.parsing_style)
+		if g_err := app._global_parse_proc(app._global_flags_ptr, global_processed, app.parsing_style); g_err != nil {
+			write_error(stderr, app._global_flags_type, g_err, program, app.parsing_style, app.theme, mode)
+			return nil, false
+		}
+	}
+	return remaining_args, true
+}
+
+// extract_global_args splits args into global flag args and remaining args.
+extract_global_args :: proc(
+	args: []string,
+	global_infos: []Flag_Info,
+	parsing_style: flags.Parsing_Style,
+) -> (global_args, remaining_args: []string) {
+	prefix := flag_prefix_for_style(parsing_style)
+
+	// Build lookup maps.
+	name_map := make(map[string]Flag_Info, allocator = context.temp_allocator)
+	short_map := make(map[byte]Flag_Info, allocator = context.temp_allocator)
+	for fi in global_infos {
+		name_map[fi.display_name] = fi
+		if len(fi.short_name) > 0 && parsing_style == .Unix {
+			short_map[fi.short_name[0]] = fi
+		}
+	}
+
+	global := make([dynamic]string, 0, len(args), context.temp_allocator)
+	remaining := make([dynamic]string, 0, len(args), context.temp_allocator)
+
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+
+		// Check --flag=value or --flag forms.
+		if strings.has_prefix(arg, prefix) {
+			rest := arg[len(prefix):]
+			name := rest
+			if eq := strings.index_byte(rest, '='); eq != -1 {
+				name = rest[:eq]
+			}
+
+			// Direct match.
+			if fi, ok := name_map[name]; ok {
+				append(&global, arg)
+				// If --flag (no =) and non-bool, consume next arg as value.
+				if strings.index_byte(rest, '=') == -1 && !fi.is_boolean {
+					if i + 1 < len(args) {
+						i += 1
+						append(&global, args[i])
+					}
+				}
+				i += 1
+				continue
+			}
+
+			// Check --no-{name} for negatable boolean globals.
+			if parsing_style == .Unix && strings.has_prefix(name, "no-") {
+				base_name := name[3:]
+				if fi, nok := name_map[base_name]; nok && fi.is_boolean {
+					append(&global, arg)
+					i += 1
+					continue
+				}
+			}
+		}
+
+		// Check -X short flag (Unix only).
+		if parsing_style == .Unix && len(arg) == 2 && arg[0] == '-' && arg[1] != '-' {
+			if fi, ok := short_map[arg[1]]; ok {
+				append(&global, arg)
+				if !fi.is_boolean {
+					if i + 1 < len(args) {
+						i += 1
+						append(&global, args[i])
+					}
+				}
+				i += 1
+				continue
+			}
+		}
+
+		// Everything else → remaining.
+		append(&remaining, arg)
+		i += 1
+	}
+
+	return global[:], remaining[:]
+}
+
+// preprocess_negatable_booleans rewrites --no-flag to --flag=false for boolean flags.
+// If a flag literally named "no-{name}" exists, it takes precedence (pass through).
+// Only applies to Unix parsing style.
+preprocess_negatable_booleans :: proc(args: []string, flag_infos: []Flag_Info) -> []string {
+	// Build lookup maps.
+	bool_flags := make(map[string]bool, allocator = context.temp_allocator) // display_name → true for booleans
+	all_names := make(map[string]bool, allocator = context.temp_allocator)  // all display_names
+	for fi in flag_infos {
+		all_names[fi.display_name] = true
+		if fi.is_boolean {
+			bool_flags[fi.display_name] = true
+		}
+	}
+
+	result := make([dynamic]string, 0, len(args), context.temp_allocator)
+	for arg in args {
+		// Only process args starting with "--no-".
+		if !strings.has_prefix(arg, "--no-") {
+			append(&result, arg)
+			continue
+		}
+
+		// Strip --no- prefix, and any =value suffix.
+		rest := arg[5:] // after "--no-"
+		name := rest
+		if eq := strings.index_byte(rest, '='); eq != -1 {
+			name = rest[:eq]
+		}
+
+		// If a flag literally named "no-{name}" exists, pass through.
+		negated_name := fmt.tprintf("no-%s", name)
+		if negated_name in all_names {
+			append(&result, arg)
+			continue
+		}
+
+		// If {name} is a known boolean flag, rewrite.
+		if name in bool_flags {
+			append(&result, fmt.tprintf("--%s=false", name))
+			continue
+		}
+
+		// Unknown — pass through.
+		append(&result, arg)
+	}
+	return result[:]
+}
+
+// find_greedy_flag scans args for any flag marked as greedy.
+@(private = "file")
+find_greedy_flag :: proc(args: []string, flag_infos: []Flag_Info, parsing_style: flags.Parsing_Style) -> (field_name: string, ok: bool) {
+	prefix := flag_prefix_for_style(parsing_style)
+	for arg in args {
+		for fi in flag_infos {
+			if !fi.is_greedy do continue
+			long_flag := fmt.tprintf("%s%s", prefix, fi.display_name)
+			if arg == long_flag do return fi.field_name, true
+			// Also check short name.
+			if len(fi.short_name) > 0 && parsing_style == .Unix {
+				short_flag := fmt.tprintf("-%s", fi.short_name)
+				if arg == short_flag do return fi.field_name, true
+			}
+		}
+	}
+	return "", false
+}
+
+// set_bool_field sets a bool struct field by name via reflection.
+@(private = "file")
+set_bool_field :: proc(model: rawptr, type_id: typeid, field_name: string, value: bool) {
+	fields := reflect.struct_fields_zipped(type_id)
+	for field in fields {
+		if field.name == field_name {
+			assert(reflect.is_boolean(field.type), "greedy flag must be bool")
+			ptr := rawptr(uintptr(model) + field.offset)
+			(^bool)(ptr)^ = value
+			return
+		}
+	}
+}
+
+// apply_counts sets int fields from the counts map via reflection.
+@(private = "file")
+apply_counts :: proc(model: rawptr, type_id: typeid, counts: map[string]int) {
+	fields := reflect.struct_fields_zipped(type_id)
+	for field in fields {
+		if count, ok := counts[field.name]; ok {
+			if field.type.id != int do continue
+			ptr := rawptr(uintptr(model) + field.offset)
+			(^int)(ptr)^ = count
+		}
+	}
+}
+
+// validate_xor_groups checks that at most one flag per XOR group is set.
+// Returns an error message if >1 flag in a group is non-zero, or "" on success.
+@(private = "file")
+validate_xor_groups :: proc(model: rawptr, type_id: typeid, flag_infos: []Flag_Info) -> (error_msg: string) {
+	// Group flags by xor_group name.
+	groups := make(map[string][dynamic]Flag_Info, allocator = context.temp_allocator)
+	for fi in flag_infos {
+		if len(fi.xor_group) == 0 do continue
+		if fi.xor_group not_in groups {
+			groups[fi.xor_group] = make([dynamic]Flag_Info, 0, 4, context.temp_allocator)
+		}
+		append(&groups[fi.xor_group], fi)
+	}
+
+	model_any := any{model, type_id}
+
+	errors := make([dynamic]string, 0, len(groups), context.temp_allocator)
+	for group_name, members in groups {
+		set_names := make([dynamic]string, 0, len(members), context.temp_allocator)
+		for fi in members {
+			field_val := reflect.struct_field_value_by_name(model_any, fi.field_name)
+			if field_val != nil && !is_zero_value(field_val) {
+				append(&set_names, fmt.tprintf("--%s", fi.display_name))
+			}
+		}
+		if len(set_names) > 1 {
+			joined := strings.join(set_names[:], ", ", context.temp_allocator)
+			append(&errors, fmt.tprintf(
+				"Flags %s cannot be used together (group '%s').",
+				joined, group_name,
+			))
+		}
+	}
+	if len(errors) > 0 {
+		return strings.join(errors[:], "\n", context.temp_allocator)
+	}
+	return ""
+}
+
+// write_validation_error renders a styled validation error with a help hint footer.
+write_validation_error :: proc(
+	w: io.Writer,
+	message: string,
+	program: string,
+	parsing_style: flags.Parsing_Style,
+	theme: Theme,
+	mode: term.Render_Mode,
+	n: ^int = nil,
+) {
+	prefix := flag_prefix_for_style(parsing_style)
+	write_styled(w, "Error: ", theme.error_style, mode, n)
+	io.write_string(w, message, n)
+	io.write_string(w, "\n", n)
+	io.write_string(w, "\n", n)
+	write_styled(w, "For more information, try ", theme.meta_style, mode, n)
+	write_styled(w, fmt.tprintf("%shelp", prefix), theme.flag_name_style, mode, n)
+	write_styled(w, ".", theme.meta_style, mode, n)
+	io.write_string(w, "\n", n)
 }
 
 // resolve_mode determines the render mode, auto-detecting from stdout if not specified.

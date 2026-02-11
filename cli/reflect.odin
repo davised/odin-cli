@@ -12,11 +12,18 @@ Flag_Info :: struct {
 	display_name:     string,   // CLI name (underscores -> hyphens, or name= override)
 	usage:            string,   // from `usage` tag
 	type_description: string,   // "<int>", "<string>", etc.
+	short_name:       string,   // single char, e.g. "v" (from args:"short=v")
+	env_var:          string,   // env var name (from args:"env=VAR")
+	enum_names:       []string, // enum variant names (from Type_Info_Enum)
 	pos:              int,      // positional index, or -1
 	is_positional:    bool,
 	is_required:      bool,
 	is_boolean:       bool,
 	is_hidden:        bool,
+	is_greedy:        bool,     // from args:"greedy" — short-circuits before parse
+	is_count:         bool,     // from args:"count" — int field, accumulates via repeated short flags
+	is_enum:          bool,     // auto-detected from field type
+	xor_group:        string,   // from args:"xor=group" — mutually exclusive group name
 }
 
 // Tag constants matching core:flags.
@@ -32,6 +39,16 @@ SUBTAG_POS :: "pos"
 SUBTAG_REQUIRED :: "required"
 @(private = "file")
 SUBTAG_HIDDEN :: "hidden"
+@(private = "file")
+SUBTAG_SHORT :: "short"
+@(private = "file")
+SUBTAG_ENV :: "env"
+@(private = "file")
+SUBTAG_GREEDY :: "greedy"
+@(private = "file")
+SUBTAG_COUNT :: "count"
+@(private = "file")
+SUBTAG_XOR :: "xor"
 
 // extract_flags introspects a core:flags-annotated struct type and returns
 // a slice of Flag_Info describing each field. Uses temp_allocator.
@@ -60,6 +77,28 @@ extract_flags :: proc(data_type: typeid) -> []Flag_Info {
 			if _, is_required := get_subtag(args_tag, SUBTAG_REQUIRED); is_required {
 				info.is_required = true
 			}
+			if short_val, has_short := get_subtag(args_tag, SUBTAG_SHORT); has_short {
+				info.short_name = short_val
+			}
+			if env_val, has_env := get_subtag(args_tag, SUBTAG_ENV); has_env {
+				info.env_var = env_val
+			}
+			if _, has_greedy := get_subtag(args_tag, SUBTAG_GREEDY); has_greedy {
+				info.is_greedy = true
+			}
+			if _, has_count := get_subtag(args_tag, SUBTAG_COUNT); has_count {
+				info.is_count = true
+			}
+			if xor_val, has_xor := get_subtag(args_tag, SUBTAG_XOR); has_xor {
+				info.xor_group = xor_val
+			}
+		}
+
+		// Auto-detect enum types.
+		base_type := runtime.type_info_base(field.type)
+		if eti, eti_ok := base_type.variant.(runtime.Type_Info_Enum); eti_ok {
+			info.is_enum = true
+			info.enum_names = eti.names
 		}
 
 		// Display name: check name= subtag, else replace _ with -.

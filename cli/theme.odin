@@ -17,6 +17,8 @@ Theme :: struct {
 	error_style:       style.Style,  // "Error:"
 	suggest_style:     style.Style,  // "Did you mean?"
 	meta_style:        style.Style,  // brackets, separators
+	env_style:         style.Style,  // [env: VAR]
+	choices_style:     style.Style,  // {json,yaml,toml}
 }
 
 // default_theme returns a colorful theme for terminal output.
@@ -35,6 +37,8 @@ default_theme :: proc() -> Theme {
 		error_style       = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Red},
 		suggest_style     = style.Style{foreground_color = style.ANSI_Color.Cyan},
 		meta_style        = style.Style{foreground_color = style.ANSI_Color.Bright_Black},
+		env_style         = style.Style{foreground_color = style.ANSI_Color.Bright_Black},
+		choices_style     = style.Style{foreground_color = style.ANSI_Color.Yellow},
 	}
 }
 
