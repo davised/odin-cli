@@ -3,14 +3,17 @@ package table
 import "../style"
 
 Alignment :: enum {
-	LEFT,
-	CENTER,
-	RIGHT,
+	Left,
+	Center,
+	Right,
 }
+
+Rich_Text :: distinct []style.Styled_Text
 
 Cell_Content :: union {
 	string,
 	style.Styled_Text,
+	Rich_Text,
 }
 
 Cell :: struct {
@@ -36,23 +39,36 @@ Header_Config :: struct {
 }
 
 Table :: struct {
-	columns:       [dynamic]Column,
-	rows:          [dynamic]Row,
-	border:        Border_Style,
-	header_config: Header_Config,
-	padding:       int,
-	width:         int, // 0 = auto (default), >0 = target total display width
+	columns:               [dynamic]Column,
+	rows:                  [dynamic]Row,
+	border:                Border_Style,
+	header_config:         Header_Config,
+	padding:               int,
+	width:                 int, // 0 = auto (default), >0 = target total display width
+	title:                 Cell_Content, // Title rendered in top border
+	hide_column_separator: bool, // When true, no vertical lines between columns
+	wrap:                  bool, // When true, content wraps instead of truncating
 }
 
 /* make_table creates a new Table with the given border style and padding.
 	 The caller must call destroy_table when done. */
-make_table :: proc(border: Border_Style = BORDER_LIGHT, padding: int = 1, allocator := context.allocator) -> Table {
+make_table :: proc(
+	border: Border_Style = BORDER_LIGHT,
+	padding: int = 1,
+	hide_column_separator: bool = false,
+	title: Cell_Content = nil,
+	wrap: bool = false,
+	allocator := context.allocator,
+) -> Table {
 	return Table {
 		columns = make([dynamic]Column, allocator),
 		rows = make([dynamic]Row, allocator),
 		border = border,
 		header_config = Header_Config{separator = true},
 		padding = padding,
+		title = title,
+		hide_column_separator = hide_column_separator,
+		wrap = wrap,
 	}
 }
 
@@ -69,7 +85,7 @@ destroy_table :: proc(t: ^Table) {
 add_column :: proc(
 	t: ^Table,
 	header: Cell_Content = nil,
-	alignment: Alignment = .LEFT,
+	alignment: Alignment = .Left,
 	min_width: int = 0,
 	max_width: int = 0,
 ) {

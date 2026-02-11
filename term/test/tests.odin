@@ -183,3 +183,105 @@ test_wrap_empty :: proc(t: ^testing.T) {
 	_, ok := term.wrap_iterate(&it)
 	testing.expect(t, !ok, "empty string yields nothing")
 }
+
+// --- Word wrap tests ---
+
+@(test)
+test_word_wrap_basic :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	lines := term.word_wrap("hello world", 20)
+	testing.expect_value(t, len(lines), 1)
+	testing.expect_value(t, lines[0], "hello world")
+}
+
+@(test)
+test_word_wrap_split :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	lines := term.word_wrap("hello world", 7)
+	testing.expect_value(t, len(lines), 2)
+	testing.expect_value(t, lines[0], "hello")
+	testing.expect_value(t, lines[1], "world")
+}
+
+@(test)
+test_word_wrap_multi :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	lines := term.word_wrap("the quick brown fox jumps", 10)
+	testing.expect_value(t, len(lines), 3)
+	testing.expect_value(t, lines[0], "the quick")
+	testing.expect_value(t, lines[1], "brown fox")
+	testing.expect_value(t, lines[2], "jumps")
+}
+
+@(test)
+test_word_wrap_long_word :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// A single word longer than max_width forces character break.
+	lines := term.word_wrap("abcdefghij rest", 5)
+	testing.expect(t, len(lines) >= 3, "long word should force character break")
+	testing.expect_value(t, lines[0], "abcde")
+	testing.expect_value(t, lines[1], "fghij")
+	testing.expect_value(t, lines[2], "rest")
+}
+
+@(test)
+test_word_wrap_exact_fit :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	lines := term.word_wrap("hello", 5)
+	testing.expect_value(t, len(lines), 1)
+	testing.expect_value(t, lines[0], "hello")
+}
+
+@(test)
+test_word_wrap_unlimited :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	lines := term.word_wrap("hello world", 0)
+	testing.expect_value(t, len(lines), 1)
+	testing.expect_value(t, lines[0], "hello world")
+}
+
+@(test)
+test_word_wrap_empty :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	lines := term.word_wrap("", 10)
+	testing.expect_value(t, len(lines), 1)
+	testing.expect_value(t, lines[0], "")
+}
+
+@(test)
+test_word_wrap_cjk_narrow :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// CJK char (width 2) in column of width 1 — must not infinite loop.
+	// The char should be force-included despite exceeding max_width.
+	lines := term.word_wrap("你好", 1)
+	testing.expect(t, len(lines) >= 2, "CJK in narrow column should produce multiple lines")
+	testing.expect_value(t, lines[0], "你")
+	testing.expect_value(t, lines[1], "好")
+}
+
+@(test)
+test_wrap_cjk_narrow :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Character-level wrap with CJK in width=1 — must not infinite loop.
+	it := term.wrap_iterator_make("你好", 1)
+
+	line1, ok1 := term.wrap_iterate(&it)
+	testing.expect(t, ok1, "expected first line")
+	testing.expect_value(t, line1, "你")
+
+	line2, ok2 := term.wrap_iterate(&it)
+	testing.expect(t, ok2, "expected second line")
+	testing.expect_value(t, line2, "好")
+
+	_, ok3 := term.wrap_iterate(&it)
+	testing.expect(t, !ok3, "expected end")
+}

@@ -249,14 +249,20 @@ make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 		if is_help_flag(cmd_args, app.parsing_style) {
 			defaults: Flags_Type
 			write_help(
-				stdout, Flags_Type, program, app.parsing_style,
-				cmd.subcommands[:] if len(cmd.subcommands) > 0 else nil,
-				cmd.panel_config, app.theme,
-				cmd.description, "", app.max_width, mode,
-				defaults = &defaults,
-				global_flags = global_infos,
-				global_defaults = app._global_flags_ptr,
-				global_type = app._global_flags_type,
+				stdout, Flags_Type, program,
+				Help_Config{
+					parsing_style = app.parsing_style,
+					commands = cmd.subcommands[:] if len(cmd.subcommands) > 0 else nil,
+					panel_config = cmd.panel_config,
+					theme = app.theme,
+					description = cmd.description,
+					max_width = app.max_width,
+					mode = mode,
+					defaults = &defaults,
+					global_flags = global_infos,
+					global_defaults = app._global_flags_ptr,
+					global_type = app._global_flags_type,
+				},
 			)
 			return 0
 		}
@@ -311,13 +317,20 @@ make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 		if len(cmd.subcommands) > 0 {
 			defaults: Flags_Type
 			write_help(
-				stdout, Flags_Type, program, app.parsing_style,
-				cmd.subcommands[:], cmd.panel_config, app.theme,
-				cmd.description, "", app.max_width, mode,
-				defaults = &defaults,
-				global_flags = global_infos,
-				global_defaults = app._global_flags_ptr,
-				global_type = app._global_flags_type,
+				stdout, Flags_Type, program,
+				Help_Config{
+					parsing_style = app.parsing_style,
+					commands = cmd.subcommands[:],
+					panel_config = cmd.panel_config,
+					theme = app.theme,
+					description = cmd.description,
+					max_width = app.max_width,
+					mode = mode,
+					defaults = &defaults,
+					global_flags = global_infos,
+					global_defaults = app._global_flags_ptr,
+					global_type = app._global_flags_type,
+				},
 			)
 			return 1
 		}
@@ -367,12 +380,19 @@ run :: proc(app: ^App, program_args: []string) -> int {
 	// No args: show app help with error exit.
 	if len(args) == 0 {
 		write_help(
-			stdout, Empty, program, app.parsing_style,
-			app.commands[:], nil, app.theme,
-			app.description, app.version, app.max_width, mode,
-			global_flags = global_infos,
-			global_defaults = app._global_flags_ptr,
-			global_type = app._global_flags_type,
+			stdout, Empty, program,
+			Help_Config{
+				parsing_style = app.parsing_style,
+				commands = app.commands[:],
+				theme = app.theme,
+				description = app.description,
+				version = app.version,
+				max_width = app.max_width,
+				mode = mode,
+				global_flags = global_infos,
+				global_defaults = app._global_flags_ptr,
+				global_type = app._global_flags_type,
+			},
 		)
 		return 1
 	}
@@ -390,12 +410,19 @@ run :: proc(app: ^App, program_args: []string) -> int {
 	is_flag := len(first) > 0 && first[0] == '-'
 	if is_flag && is_help_flag(remaining_args, app.parsing_style) {
 		write_help(
-			stdout, Empty, program, app.parsing_style,
-			app.commands[:], nil, app.theme,
-			app.description, app.version, app.max_width, mode,
-			global_flags = global_infos,
-			global_defaults = app._global_flags_ptr,
-			global_type = app._global_flags_type,
+			stdout, Empty, program,
+			Help_Config{
+				parsing_style = app.parsing_style,
+				commands = app.commands[:],
+				theme = app.theme,
+				description = app.description,
+				version = app.version,
+				max_width = app.max_width,
+				mode = mode,
+				global_flags = global_infos,
+				global_defaults = app._global_flags_ptr,
+				global_type = app._global_flags_type,
+			},
 		)
 		return 0
 	}
@@ -409,12 +436,19 @@ run :: proc(app: ^App, program_args: []string) -> int {
 	// Handle no remaining args after global extraction.
 	if len(remaining_args) == 0 {
 		write_help(
-			stdout, Empty, program, app.parsing_style,
-			app.commands[:], nil, app.theme,
-			app.description, app.version, app.max_width, mode,
-			global_flags = global_infos,
-			global_defaults = app._global_flags_ptr,
-			global_type = app._global_flags_type,
+			stdout, Empty, program,
+			Help_Config{
+				parsing_style = app.parsing_style,
+				commands = app.commands[:],
+				theme = app.theme,
+				description = app.description,
+				version = app.version,
+				max_width = app.max_width,
+				mode = mode,
+				global_flags = global_infos,
+				global_defaults = app._global_flags_ptr,
+				global_type = app._global_flags_type,
+			},
 		)
 		return 1
 	}
@@ -445,6 +479,8 @@ run :: proc(app: ^App, program_args: []string) -> int {
 }
 
 // parse_or_exit is a drop-in replacement for flags.parse_or_exit with rich output.
+// For custom validation, check the model after this proc returns.
+// For the full-featured App API with built-in validators, use make_app + set_validator.
 parse_or_exit :: proc(
 	model: ^$T,
 	program_args: []string,
@@ -454,7 +490,7 @@ parse_or_exit :: proc(
 	version: string = "",
 	theme_override: Maybe(Theme) = nil,
 	mode: Maybe(term.Render_Mode) = nil,
-	validator: proc(flags_val: ^T) -> string = nil,
+	help_on_empty: bool = false,
 ) {
 	assert(len(program_args) > 0, "Program arguments slice is empty.")
 
@@ -467,16 +503,41 @@ parse_or_exit :: proc(
 	resolved_mode := resolve_mode(mode)
 	all_flags := extract_flags(T)
 
+	// Show help when invoked with no arguments.
+	if help_on_empty && len(args) == 0 {
+		stdout := os.stream_from_handle(os.stdout)
+		defaults: T
+		write_help(
+			stdout, T, program,
+			Help_Config{
+				parsing_style = parsing_style,
+				panel_config = panel_config,
+				theme = theme_override,
+				description = description,
+				version = version,
+				mode = resolved_mode,
+				defaults = &defaults,
+			},
+		)
+		os.exit(0)
+	}
+
 	// Greedy: intercept --help and --version before parsing, so they
 	// work even alongside invalid flags (e.g. `myapp --bad --help`).
 	if is_help_flag(args, parsing_style) {
 		stdout := os.stream_from_handle(os.stdout)
 		defaults: T
 		write_help(
-			stdout, T, program, parsing_style,
-			nil, panel_config, theme_override,
-			description, version, 0, resolved_mode,
-			defaults = &defaults,
+			stdout, T, program,
+			Help_Config{
+				parsing_style = parsing_style,
+				panel_config = panel_config,
+				theme = theme_override,
+				description = description,
+				version = version,
+				mode = resolved_mode,
+				defaults = &defaults,
+			},
 		)
 		os.exit(0)
 	}
@@ -513,16 +574,6 @@ parse_or_exit :: proc(
 		theme := theme_override.? or_else default_theme()
 		write_validation_error(stderr, xor_err, program, parsing_style, theme, resolved_mode)
 		os.exit(1)
-	}
-
-	// Custom validator.
-	if validator != nil {
-		if val_err := validator(model); len(val_err) > 0 {
-			stderr := os.stream_from_handle(os.stderr)
-			theme := theme_override.? or_else default_theme()
-			write_validation_error(stderr, val_err, program, parsing_style, theme, resolved_mode)
-			os.exit(1)
-		}
 	}
 }
 

@@ -26,6 +26,7 @@ main :: proc() {
 		panel_config = {
 			cli.Panel{name = "Authentication", fields = {"token"}},
 		},
+		help_on_empty = true,
 	)
 
 	fmt.printfln("Input:   %s", options.input)

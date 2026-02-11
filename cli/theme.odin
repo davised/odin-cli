@@ -19,6 +19,7 @@ Theme :: struct {
 	meta_style:        style.Style,  // brackets, separators
 	env_style:         style.Style,  // [env: VAR]
 	choices_style:     style.Style,  // {json,yaml,toml}
+	title_style:       style.Style,  // section title in border
 }
 
 // default_theme returns a colorful theme for terminal output.
@@ -39,6 +40,7 @@ default_theme :: proc() -> Theme {
 		meta_style        = style.Style{foreground_color = style.ANSI_Color.Bright_Black},
 		env_style         = style.Style{foreground_color = style.ANSI_Color.Bright_Black},
 		choices_style     = style.Style{foreground_color = style.ANSI_Color.Yellow},
+		title_style       = style.Style{text_styles = {.Bold}},
 	}
 }
 

@@ -10,6 +10,12 @@ display_width :: proc(content: Cell_Content) -> int {
 		return text_display_width(c)
 	case style.Styled_Text:
 		return text_display_width(c.text)
+	case Rich_Text:
+		total := 0
+		for seg in c {
+			total += text_display_width(seg.text)
+		}
+		return total
 	}
 	return 0
 }
@@ -87,6 +93,11 @@ cell_text :: proc(content: Cell_Content) -> string {
 		return c
 	case style.Styled_Text:
 		return c.text
+	case Rich_Text:
+		for seg in c {
+			if len(seg.text) > 0 do return seg.text
+		}
+		return ""
 	}
 	return ""
 }
