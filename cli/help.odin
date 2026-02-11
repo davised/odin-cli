@@ -511,6 +511,7 @@ format_enum_choices :: proc(names: []string) -> string {
 }
 
 // is_zero_value checks if a reflected value is the zero value for its type.
+@(private)
 is_zero_value :: proc(val: any) -> bool {
 	if val == nil do return true
 

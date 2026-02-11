@@ -87,6 +87,7 @@ SUBTAG_PATH_EXISTS :: "path_exists"
 
 // extract_flags introspects a core:flags-annotated struct type and returns
 // a slice of Flag_Info describing each field. Uses temp_allocator.
+@(private)
 extract_flags :: proc(data_type: typeid) -> []Flag_Info {
 	fields := reflect.struct_fields_zipped(data_type)
 	if len(fields) == 0 do return nil

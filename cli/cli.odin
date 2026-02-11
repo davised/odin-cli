@@ -605,6 +605,7 @@ parse_or_exit :: proc(
 }
 
 // Preprocess_Result holds the output of short flag preprocessing.
+@(private)
 Preprocess_Result :: struct {
 	args:   []string,       // rewritten args for flags.parse
 	counts: map[string]int, // field_name → count (for count flags)
@@ -613,6 +614,7 @@ Preprocess_Result :: struct {
 // preprocess_short_flags rewrites short flags to their long equivalents.
 // -v → --verbose, -v=val → --verbose=val, -o val → --output val
 // -vvv → counts["verbose"] = 3 for count flags
+@(private)
 preprocess_short_flags :: proc(args: []string, flag_infos: []Flag_Info) -> Preprocess_Result {
 	// Build short_char → Flag_Info lookup.
 	short_map := make(map[byte]Flag_Info, allocator = context.temp_allocator)
@@ -782,6 +784,7 @@ parse_global_flags :: proc(
 }
 
 // extract_global_args splits args into global flag args and remaining args.
+@(private)
 extract_global_args :: proc(
 	args: []string,
 	global_infos: []Flag_Info,
@@ -865,6 +868,7 @@ extract_global_args :: proc(
 // preprocess_negatable_booleans rewrites --no-flag to --flag=false for boolean flags.
 // If a flag literally named "no-{name}" exists, it takes precedence (pass through).
 // Only applies to Unix parsing style.
+@(private)
 preprocess_negatable_booleans :: proc(args: []string, flag_infos: []Flag_Info) -> []string {
 	// Build lookup maps.
 	bool_flags := make(map[string]bool, allocator = context.temp_allocator) // display_name → true for booleans
@@ -1242,6 +1246,7 @@ format_range_val :: proc(v: f64) -> string {
 }
 
 // write_validation_error renders a styled validation error with a help hint footer.
+@(private)
 write_validation_error :: proc(
 	w: io.Writer,
 	message: string,
