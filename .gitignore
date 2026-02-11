@@ -1,6 +1,8 @@
 # Build artifacts
 *.bin
 *.bin.dSYM/
+examples/cli_demo/cli_demo
+examples/hqsub_demo/hqsub
 
 # OS
 .DS_Store
