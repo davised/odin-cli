@@ -95,7 +95,7 @@ test_alignment :: proc(t: ^testing.T) {
 		tbl := table.make_table(border = table.BORDER_ASCII)
 		defer table.destroy_table(&tbl)
 
-		table.add_column(&tbl, "Col", alignment = .LEFT, min_width = 8)
+		table.add_column(&tbl, "Col", alignment = .Left, min_width = 8)
 		table.add_row(&tbl, "hi")
 
 		result, ok := table.to_str(tbl)
@@ -111,7 +111,7 @@ test_alignment :: proc(t: ^testing.T) {
 		tbl := table.make_table(border = table.BORDER_ASCII)
 		defer table.destroy_table(&tbl)
 
-		table.add_column(&tbl, "Col", alignment = .RIGHT, min_width = 8)
+		table.add_column(&tbl, "Col", alignment = .Right, min_width = 8)
 		table.add_row(&tbl, "hi")
 
 		result, ok := table.to_str(tbl)
@@ -126,7 +126,7 @@ test_alignment :: proc(t: ^testing.T) {
 		tbl := table.make_table(border = table.BORDER_ASCII)
 		defer table.destroy_table(&tbl)
 
-		table.add_column(&tbl, "Col", alignment = .CENTER, min_width = 8)
+		table.add_column(&tbl, "Col", alignment = .Center, min_width = 8)
 		table.add_row(&tbl, "hi")
 
 		result, ok := table.to_str(tbl)
@@ -388,8 +388,8 @@ test_cell_alignment_override :: proc(t: ^testing.T) {
 	tbl := table.make_table(border = table.BORDER_ASCII)
 	defer table.destroy_table(&tbl)
 
-	table.add_column(&tbl, "Col", alignment = .LEFT, min_width = 8)
-	table.add_row_cells(&tbl, table.Cell{content = "right", alignment = .RIGHT})
+	table.add_column(&tbl, "Col", alignment = .Left, min_width = 8)
+	table.add_row_cells(&tbl, table.Cell{content = "right", alignment = .Right})
 
 	result, ok := table.to_str(tbl)
 	defer delete(result)
@@ -807,4 +807,377 @@ test_render_no_color :: proc(t: ^testing.T) {
 	// No color codes
 	testing.expect(t, !strings.contains(result, "\x1b[36m"), "No_Color should not contain cyan color")
 	testing.expect(t, !strings.contains(result, "\x1b[31m"), "No_Color should not contain red color")
+}
+
+// --- Title tests ---
+
+@(test)
+test_title_rounded :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_ROUNDED, title = "Options")
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, min_width = 8)
+	table.add_column(&tbl, min_width = 8)
+	table.add_row(&tbl, "a", "b")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "title render should succeed")
+	testing.expect(t, strings.contains(result, "╭─ Options ─"), "Should have title in top border")
+	testing.expect(t, strings.contains(result, "╮"), "Should have top-right corner")
+	testing.expect(t, strings.contains(result, "╰"), "Should have bottom-left corner")
+}
+
+@(test)
+test_title_ascii :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_ASCII, title = "Title")
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, min_width = 10)
+	table.add_row(&tbl, "x")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "ASCII title should succeed")
+	testing.expect(t, strings.contains(result, "+- Title -"), "Should have title in ASCII border")
+}
+
+@(test)
+test_title_styled :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(
+		border = table.BORDER_ROUNDED,
+		title = style.Styled_Text{text = "Options", style = style.Style{text_styles = {.Bold}}},
+	)
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, min_width = 10)
+	table.add_row(&tbl, "x")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "styled title should succeed")
+	testing.expect(t, strings.contains(result, "\x1b[1m"), "Styled title should have bold ANSI")
+	testing.expect(t, strings.contains(result, "Options"), "Should contain title text")
+}
+
+@(test)
+test_title_plain_mode :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_ROUNDED, title = "Options")
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl)
+	table.add_row(&tbl, "x")
+
+	result, ok := table.to_str(tbl, .Plain)
+	defer delete(result)
+
+	testing.expect(t, ok, "title plain mode should succeed")
+	// Plain mode strips borders, so no title border
+	testing.expect(t, !strings.contains(result, "╭"), "Plain should not have border chars")
+}
+
+// --- Hide column separator tests ---
+
+@(test)
+test_hide_column_separator :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_ROUNDED, hide_column_separator = true)
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl)
+	table.add_column(&tbl)
+	table.add_row(&tbl, "aa", "bb")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "hide separator should succeed")
+	// No internal column separator (│) between columns in data rows
+	lines := strings.split(result, "\n")
+	defer delete(lines)
+	for line in lines {
+		if line == "" do continue
+		// Data rows should have │ only at borders (left/right), not between columns
+		if strings.contains(line, "aa") {
+			// Count │ occurrences — should be exactly 2 (left + right border)
+			count := strings.count(line, "│")
+			testing.expect_value(t, count, 2)
+		}
+	}
+	// Border lines should be continuous (no ┬ or ┴)
+	testing.expect(t, !strings.contains(result, "┬"), "Should not have top tee")
+	testing.expect(t, !strings.contains(result, "┴"), "Should not have bottom tee")
+}
+
+@(test)
+test_hide_column_separator_width :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// With hide_column_separator, total width should be the same as without
+	// (space replaces │, both width 1).
+	tbl_hidden := table.make_table(border = table.BORDER_ROUNDED, hide_column_separator = true)
+	defer table.destroy_table(&tbl_hidden)
+
+	tbl_hidden.width = 30
+	table.add_column(&tbl_hidden)
+	table.add_column(&tbl_hidden)
+	table.add_row(&tbl_hidden, "aa", "bb")
+
+	result, ok := table.to_str(tbl_hidden)
+	defer delete(result)
+
+	testing.expect(t, ok, "hide separator width should succeed")
+	lines := strings.split(result, "\n")
+	defer delete(lines)
+	for line in lines {
+		if line == "" do continue
+		w := table.text_display_width(line)
+		testing.expect_value(t, w, 30)
+	}
+}
+
+// --- Rich_Text tests ---
+
+@(test)
+test_rich_text_display_width :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	rt := table.Rich_Text{
+		style.Styled_Text{text = "hello ", style = style.Style{text_styles = {.Bold}}},
+		style.Styled_Text{text = "world", style = style.Style{foreground_color = style.ANSI_Color.Red}},
+	}
+
+	w := table.display_width(rt)
+	testing.expect_value(t, w, 11) // "hello " (6) + "world" (5)
+}
+
+@(test)
+test_rich_text_render :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_ASCII)
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, "Info")
+	table.add_row(&tbl, table.Rich_Text{
+		style.Styled_Text{text = "req ", style = style.Style{foreground_color = style.ANSI_Color.Red}},
+		style.Styled_Text{text = "opt", style = style.Style{foreground_color = style.ANSI_Color.Green}},
+	})
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "Rich_Text render should succeed")
+	testing.expect(t, strings.contains(result, "req "), "Should contain first segment text")
+	testing.expect(t, strings.contains(result, "opt"), "Should contain second segment text")
+	testing.expect(t, strings.contains(result, "\x1b[31m"), "Should have red ANSI code")
+	testing.expect(t, strings.contains(result, "\x1b[32m"), "Should have green ANSI code")
+}
+
+@(test)
+test_rich_text_plain :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_ASCII)
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, "Info")
+	table.add_row(&tbl, table.Rich_Text{
+		style.Styled_Text{text = "hello ", style = style.Style{foreground_color = style.ANSI_Color.Red}},
+		style.Styled_Text{text = "world", style = style.Style{}},
+	})
+
+	result, ok := table.to_str(tbl, .Plain)
+	defer delete(result)
+
+	testing.expect(t, ok, "Rich_Text plain should succeed")
+	testing.expect(t, strings.contains(result, "hello world"), "Should contain combined text")
+	testing.expect(t, !strings.contains(result, "\x1b["), "Plain should not have ANSI codes")
+}
+
+// --- Combined: title + hide_column_separator ---
+
+// --- Word wrap tests ---
+
+@(test)
+test_word_wrap_basic :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_ASCII, wrap = true)
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, "Key", min_width = 3, max_width = 3)
+	table.add_column(&tbl, "Desc", min_width = 10, max_width = 10)
+	table.add_row(&tbl, "A", "Short text fits on one line")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "word wrap basic should succeed")
+	// "Short text fits on one line" (26 chars) must wrap into 10-char column.
+	// Should NOT contain ellipsis — wrapping, not truncating.
+	testing.expect(t, !strings.contains(result, "…"), "wrap should not truncate")
+	// Should contain full text across multiple lines.
+	testing.expect(t, strings.contains(result, "Short"), "should contain first word")
+	testing.expect(t, strings.contains(result, "line"), "should contain last word")
+}
+
+@(test)
+test_word_wrap_multiline :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Table with 2 columns: fixed flag + wrapping description.
+	tbl := table.make_table(border = table.BORDER_ROUNDED, hide_column_separator = true, wrap = true)
+	defer table.destroy_table(&tbl)
+
+	tbl.width = 30
+	table.add_column(&tbl, min_width = 5, max_width = 5) // flag col
+	table.add_column(&tbl)                                 // desc col (expands)
+	table.add_row(&tbl, "flag", "This is a long description that should wrap")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "multiline wrap should succeed")
+	testing.expect(t, !strings.contains(result, "…"), "should wrap, not truncate")
+	// Continuation lines should have blank space where flag column was.
+	lines := strings.split(result, "\n")
+	defer delete(lines)
+	data_lines := 0
+	for line in lines {
+		if strings.contains(line, "│") && !strings.contains(line, "─") {
+			data_lines += 1
+		}
+	}
+	testing.expect(t, data_lines > 1, "should produce multiple physical lines for wrapped row")
+}
+
+@(test)
+test_word_wrap_line_widths :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Verify all lines have the target width when wrapping.
+	tbl := table.make_table(border = table.BORDER_ROUNDED, hide_column_separator = true, wrap = true)
+	defer table.destroy_table(&tbl)
+
+	tbl.width = 40
+	table.add_column(&tbl, min_width = 6, max_width = 6)
+	table.add_column(&tbl)
+	table.add_row(&tbl, "flag", "A description that is longer than the available space in the column")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "wrapped line widths should succeed")
+	lines := strings.split(result, "\n")
+	defer delete(lines)
+	for line in lines {
+		if line == "" do continue
+		w := table.text_display_width(line)
+		testing.expect_value(t, w, 40)
+	}
+}
+
+@(test)
+test_word_wrap_styled_text :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_ASCII, wrap = true)
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, "X", min_width = 3, max_width = 3)
+	table.add_column(&tbl, "Desc", min_width = 12, max_width = 12)
+	table.add_row(&tbl, "a", style.Styled_Text{
+		text = "A styled description that wraps",
+		style = style.Style{text_styles = {.Bold}},
+	})
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "styled wrap should succeed")
+	testing.expect(t, !strings.contains(result, "…"), "styled wrap should not truncate")
+	// Bold ANSI should appear on continuation lines too.
+	lines := strings.split(result, "\n")
+	defer delete(lines)
+	bold_line_count := 0
+	for line in lines {
+		if strings.contains(line, "\x1b[1m") {
+			bold_line_count += 1
+		}
+	}
+	testing.expect(t, bold_line_count >= 2, "styled text should be bold on multiple wrapped lines")
+}
+
+@(test)
+test_word_wrap_no_wrap_when_fits :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// When content fits in the column, wrap=true should produce the same output as wrap=false.
+	tbl_wrap := table.make_table(border = table.BORDER_ASCII, wrap = true)
+	defer table.destroy_table(&tbl_wrap)
+	table.add_column(&tbl_wrap, "Name")
+	table.add_column(&tbl_wrap, "Age")
+	table.add_row(&tbl_wrap, "Alice", "30")
+
+	tbl_nowrap := table.make_table(border = table.BORDER_ASCII)
+	defer table.destroy_table(&tbl_nowrap)
+	table.add_column(&tbl_nowrap, "Name")
+	table.add_column(&tbl_nowrap, "Age")
+	table.add_row(&tbl_nowrap, "Alice", "30")
+
+	result_wrap, ok_wrap := table.to_str(tbl_wrap)
+	defer delete(result_wrap)
+	result_nowrap, ok_nowrap := table.to_str(tbl_nowrap)
+	defer delete(result_nowrap)
+
+	testing.expect(t, ok_wrap, "wrap table should succeed")
+	testing.expect(t, ok_nowrap, "nowrap table should succeed")
+	testing.expect_value(t, result_wrap, result_nowrap)
+}
+
+@(test)
+test_title_with_hidden_separator :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(
+		border = table.BORDER_ROUNDED,
+		hide_column_separator = true,
+		title = "Options",
+	)
+	defer table.destroy_table(&tbl)
+
+	tbl.width = 40
+	table.add_column(&tbl)
+	table.add_column(&tbl)
+	table.add_row(&tbl, "flag", "description")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "combined features should succeed")
+	testing.expect(t, strings.contains(result, "╭─ Options ─"), "Should have titled border")
+	testing.expect(t, !strings.contains(result, "┬"), "Should not have column tees")
+	testing.expect(t, !strings.contains(result, "┴"), "Should not have column tees")
+
+	// All lines should be width 40
+	lines := strings.split(result, "\n")
+	defer delete(lines)
+	for line in lines {
+		if line == "" do continue
+		w := table.text_display_width(line)
+		testing.expect_value(t, w, 40)
+	}
 }
