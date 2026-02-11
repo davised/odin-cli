@@ -1,6 +1,7 @@
 package progress_test
 
 import progress ".."
+import style "../../style"
 import "core:fmt"
 import "core:strings"
 import "core:testing"
@@ -156,4 +157,38 @@ test_fmt_formatter :: proc(t: ^testing.T) {
 
 	testing.expect(t, ok, "to_str should succeed")
 	testing.expect_value(t, formatted, direct)
+}
+
+@(test)
+test_plain_mode :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	p := progress.make_progress(100, width = 10, show_percentage = true, mode = .Plain)
+	p.current = 50
+	p.fill_style = style.Style{foreground_color = style.ANSI_Color.Green}
+	result, ok := progress.to_str(p)
+	defer delete(result)
+
+	testing.expect(t, ok, "Plain to_str should succeed")
+	testing.expect(t, !strings.contains(result, "\x1b["), "Plain should contain no ANSI codes")
+	testing.expect(t, strings.contains(result, "["), "Plain should still have bar caps")
+	testing.expect(t, strings.contains(result, "]"), "Plain should still have bar caps")
+	testing.expect(t, strings.contains(result, "50%"), "Plain should preserve percentage")
+}
+
+@(test)
+test_no_color_mode :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	p := progress.make_progress(100, width = 10, show_percentage = false, mode = .No_Color)
+	p.current = 50
+	p.fill_style = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Green}
+	result, ok := progress.to_str(p)
+	defer delete(result)
+
+	testing.expect(t, ok, "No_Color to_str should succeed")
+	// Bold SGR present on fill, color stripped
+	testing.expect(t, strings.contains(result, "\x1b[1m"), "No_Color should keep bold on fill")
+	testing.expect(t, strings.contains(result, "\x1b[0m"), "No_Color should have reset")
+	testing.expect(t, !strings.contains(result, "\x1b[32m"), "No_Color should not have green color")
 }

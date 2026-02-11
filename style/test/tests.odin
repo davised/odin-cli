@@ -357,3 +357,66 @@ test_Styled_Text_Formatter :: proc(t: ^testing.T) {
 		testing.expect_value(t, output, test_case.expected_output)
 	}
 }
+
+@(test)
+test_to_writer_plain :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	st := style.Styled_Text {
+		text = "hello",
+		style = style.Style {
+			text_styles = {.Bold, .Italic},
+			foreground_color = style.ANSI_Color.Red,
+			background_color = style.ANSI_Color.Blue,
+		},
+	}
+
+	result, ok := style.to_str(st, .Plain)
+	defer delete(result)
+
+	testing.expect(t, ok, "to_str Plain should succeed")
+	testing.expect_value(t, result, "hello")
+	testing.expect(t, !strings.contains(result, "\x1b["), "Plain mode should contain no ANSI codes")
+}
+
+@(test)
+test_to_writer_no_color :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	st := style.Styled_Text {
+		text = "hello",
+		style = style.Style {
+			text_styles = {.Bold, .Italic},
+			foreground_color = style.ANSI_Color.Red,
+			background_color = style.ANSI_Color.Blue,
+		},
+	}
+
+	result, ok := style.to_str(st, .No_Color)
+	defer delete(result)
+
+	testing.expect(t, ok, "to_str No_Color should succeed")
+	// Should contain bold+italic SGR and reset, but no color codes
+	testing.expect(t, strings.contains(result, "\x1b[1;3m"), "No_Color should contain bold+italic SGR")
+	testing.expect(t, strings.contains(result, "\x1b[0m"), "No_Color should contain reset")
+	testing.expect(t, strings.contains(result, "hello"), "No_Color should contain text")
+	// Should NOT contain color codes (31m for red, 44m for blue bg)
+	testing.expect(t, !strings.contains(result, "\x1b[31m"), "No_Color should not contain fg color")
+	testing.expect(t, !strings.contains(result, "\x1b[44m"), "No_Color should not contain bg color")
+}
+
+@(test)
+test_to_writer_plain_empty :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	st := style.Styled_Text {
+		text = "",
+		style = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Red},
+	}
+
+	result, ok := style.to_str(st, .Plain)
+	defer delete(result)
+
+	testing.expect(t, ok, "Plain empty text should succeed")
+	testing.expect_value(t, result, "")
+}

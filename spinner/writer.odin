@@ -34,7 +34,7 @@ to_writer :: proc(w: io.Writer, s: Spinner, n: ^int = nil) -> bool {
 			text  = frame,
 			style = ts,
 		}
-		style.to_writer(w, st, n) or_return
+		style.to_writer(w, st, n, s.mode) or_return
 	} else {
 		_, err := io.write_string(w, frame, n)
 		if err != .None do return false

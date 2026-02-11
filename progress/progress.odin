@@ -26,6 +26,7 @@ Progress :: struct {
 	show_count:      bool,
 	show_elapsed:    bool,
 	fill_style:      Maybe(style.Style),
+	mode:            term.Render_Mode,
 	_start_tick:     time.Tick,
 	_started:        bool,
 }
@@ -57,7 +58,8 @@ bar_thin :: proc() -> Bar_Style {
 	}
 }
 
-/* make_progress creates a new progress bar with the given configuration. */
+/* make_progress creates a new progress bar with the given configuration.
+	 mode auto-detects from stderr when not specified. */
 make_progress :: proc(
 	total: int,
 	bar_style: Maybe(Bar_Style) = nil,
@@ -66,6 +68,7 @@ make_progress :: proc(
 	show_percentage := true,
 	show_count := false,
 	show_elapsed := false,
+	mode: Maybe(term.Render_Mode) = nil,
 ) -> Progress {
 	bs := bar_style.? or_else bar_block()
 	return Progress {
@@ -78,35 +81,47 @@ make_progress :: proc(
 		show_count = show_count,
 		show_elapsed = show_elapsed,
 		fill_style = nil,
+		mode = mode.? or_else term.detect_render_mode(os.stderr),
 		_started = false,
 	}
 }
 
-/* start records the start time and draws the initial bar to stderr. */
+/* start records the start time and draws the initial bar to stderr.
+	 In Plain mode, records time without drawing. */
 start :: proc(p: ^Progress) {
 	p._start_tick = time.tick_now()
 	p._started = true
-	redraw(p)
+	if p.mode != .Plain {
+		redraw(p)
+	}
 }
 
 /* update sets the current value and redraws the bar. */
 update :: proc(p: ^Progress, current: int) {
 	p.current = min(current, p.total)
-	redraw(p)
+	if p.mode != .Plain {
+		redraw(p)
+	}
 }
 
 /* increment advances current by amount and redraws the bar. */
 increment :: proc(p: ^Progress, amount := 1) {
 	p.current = min(p.current + amount, p.total)
-	redraw(p)
+	if p.mode != .Plain {
+		redraw(p)
+	}
 }
 
-/* complete fills the bar to 100%, writes a final message, and appends a newline. */
+/* complete fills the bar to 100%, writes a final message, and appends a newline.
+	 In Plain mode, writes without terminal control sequences. */
 complete :: proc(p: ^Progress, final_message := "") {
 	p.current = p.total
 	w := os.stream_from_handle(os.stderr)
-	io.write_string(w, "\r")
-	io.write_string(w, ansi.CSI + "0" + ansi.EL)
+
+	if p.mode != .Plain {
+		io.write_string(w, "\r")
+		io.write_string(w, ansi.CSI + "0" + ansi.EL)
+	}
 
 	if final_message != "" {
 		io.write_string(w, final_message)

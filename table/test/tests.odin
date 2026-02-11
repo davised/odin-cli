@@ -755,3 +755,56 @@ test_fill_width_uneven_columns :: proc(t: ^testing.T) {
 		testing.expect_value(t, table.text_display_width(line), 46)
 	}
 }
+
+@(test)
+test_render_plain :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_LIGHT)
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, "Name")
+	table.add_column(&tbl, "Age")
+	table.set_header_style(&tbl, style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Cyan})
+	table.add_row(&tbl, style.red("Alice"), "30")
+
+	result, ok := table.to_str(tbl, .Plain)
+	defer delete(result)
+
+	testing.expect(t, ok, "Plain render should succeed")
+	// No ANSI codes at all
+	testing.expect(t, !strings.contains(result, "\x1b["), "Plain should contain no ANSI codes")
+	// No border chars (BORDER_NONE forced)
+	testing.expect(t, !strings.contains(result, "┌"), "Plain should strip box-drawing borders")
+	testing.expect(t, !strings.contains(result, "│"), "Plain should strip vertical borders")
+	// Content preserved
+	testing.expect(t, strings.contains(result, "Name"), "Plain should preserve header text")
+	testing.expect(t, strings.contains(result, "Alice"), "Plain should preserve cell text")
+	testing.expect(t, strings.contains(result, "30"), "Plain should preserve cell text")
+}
+
+@(test)
+test_render_no_color :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tbl := table.make_table(border = table.BORDER_LIGHT)
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, "Status")
+	table.set_header_style(&tbl, style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Cyan})
+	table.add_row(&tbl, style.red("OK"))
+
+	result, ok := table.to_str(tbl, .No_Color)
+	defer delete(result)
+
+	testing.expect(t, ok, "No_Color render should succeed")
+	// Borders preserved
+	testing.expect(t, strings.contains(result, "┌"), "No_Color should keep borders")
+	testing.expect(t, strings.contains(result, "│"), "No_Color should keep borders")
+	// Bold SGR present (from header style)
+	testing.expect(t, strings.contains(result, "\x1b[1m"), "No_Color should keep bold style")
+	testing.expect(t, strings.contains(result, "\x1b[0m"), "No_Color should have reset")
+	// No color codes
+	testing.expect(t, !strings.contains(result, "\x1b[36m"), "No_Color should not contain cyan color")
+	testing.expect(t, !strings.contains(result, "\x1b[31m"), "No_Color should not contain red color")
+}

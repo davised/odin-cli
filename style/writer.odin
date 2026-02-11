@@ -1,6 +1,7 @@
 #+feature global-context
 package style
 
+import "../term"
 import "core:fmt"
 import "core:io"
 import "core:log"
@@ -122,18 +123,43 @@ Inputs:
 Returns:
 - true on success, false if any write operation fails.
 */
-to_writer :: proc(writer: io.Writer, styled_text: Styled_Text, n: ^int = nil) -> bool {
-	if text_styles_to_writer(writer, styled_text.style.text_styles, n) != io.Error.None {
-		return false
+to_writer :: proc(
+	writer: io.Writer,
+	styled_text: Styled_Text,
+	n: ^int = nil,
+	mode: term.Render_Mode = .Full,
+) -> bool {
+	if mode == .Plain {
+		_, err := io.write_string(writer, styled_text.text, n)
+		return err == .None
 	}
-	if color_to_writer(writer, styled_text.style.foreground_color, false, n) != io.Error.None {
-		return false
+
+	has_styles := styled_text.style.text_styles != {}
+	has_colors := styled_text.style.foreground_color != nil || styled_text.style.background_color != nil
+	needs_ansi := (mode == .Full && (has_styles || has_colors)) || (mode == .No_Color && has_styles)
+
+	if has_styles {
+		if text_styles_to_writer(writer, styled_text.style.text_styles, n) != io.Error.None {
+			return false
+		}
 	}
-	if color_to_writer(writer, styled_text.style.background_color, true, n) != io.Error.None {
-		return false
+	if mode == .Full {
+		if color_to_writer(writer, styled_text.style.foreground_color, false, n) != io.Error.None {
+			return false
+		}
+		if color_to_writer(writer, styled_text.style.background_color, true, n) != io.Error.None {
+			return false
+		}
 	}
-	if text_to_writer(writer, styled_text.text, n) != io.Error.None {
-		return false
+
+	// Write text, and append reset only if we emitted any SGR sequences
+	if needs_ansi {
+		if text_to_writer(writer, styled_text.text, n) != io.Error.None {
+			return false
+		}
+	} else {
+		_, err := io.write_string(writer, styled_text.text, n)
+		if err != .None do return false
 	}
 	return true
 }
@@ -151,21 +177,18 @@ Returns:
 - The formatted string with ANSI escape codes, or "" if the text is empty.
 - true if bytes were written, false otherwise (optional).
 */
-to_str :: proc(styled_text: Styled_Text, allocator := context.allocator) -> (string, bool) #optional_ok {
+to_str :: proc(
+	styled_text: Styled_Text,
+	mode: term.Render_Mode = .Full,
+	allocator := context.allocator,
+) -> (string, bool) #optional_ok {
 	if styled_text.text == "" {
 		return "", true
 	}
 
-	n := 0
 	sb := strings.builder_make(allocator = allocator)
-	w := strings.to_writer(&sb)
-
-	text_styles_to_writer(w, styled_text.style.text_styles, &n)
-	color_to_writer(w, styled_text.style.foreground_color, false, &n)
-	color_to_writer(w, styled_text.style.background_color, true, &n)
-	text_to_writer(w, styled_text.text, &n)
-
-	return strings.to_string(sb), n > 0
+	ok := to_writer(strings.to_writer(&sb), styled_text, mode = mode)
+	return strings.to_string(sb), ok
 }
 
 /*

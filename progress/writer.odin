@@ -75,7 +75,7 @@ to_writer :: proc(w: io.Writer, p: Progress, n: ^int = nil) -> bool {
 			text  = string(fill_buf[:fill_len]),
 			style = s,
 		}
-		style.to_writer(w, st, n) or_return
+		style.to_writer(w, st, n, p.mode) or_return
 	} else {
 		for _ in 0 ..< filled {
 			write_str(w, p.bar_style.fill, n) or_return

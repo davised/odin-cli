@@ -2,6 +2,7 @@
 package table
 
 import "../style"
+import "../term"
 import "core:fmt"
 import "core:io"
 import "core:strings"
@@ -19,9 +20,15 @@ init_formatter :: proc() {
 }
 
 /* to_writer renders a table to an io.Writer. */
-to_writer :: proc(w: io.Writer, t: Table, n: ^int = nil) -> bool {
+to_writer :: proc(w: io.Writer, t: Table, n: ^int = nil, mode: term.Render_Mode = .Full) -> bool {
 	if len(t.columns) == 0 {
 		return true
+	}
+
+	// Plain mode strips borders entirely
+	t := t
+	if mode == .Plain {
+		t.border = BORDER_NONE
 	}
 
 	widths := compute_column_widths(t)
@@ -40,7 +47,7 @@ to_writer :: proc(w: io.Writer, t: Table, n: ^int = nil) -> bool {
 				content = col.header,
 			}
 		}
-		if !write_row(w, t, header_cells, widths, t.header_config.style, n) do return false
+		if !write_row(w, t, header_cells, widths, t.header_config.style, n, mode) do return false
 
 		if t.header_config.separator && t.border.header_separator {
 			if !write_border_line(w, t, widths, .MIDDLE, n) do return false
@@ -49,7 +56,7 @@ to_writer :: proc(w: io.Writer, t: Table, n: ^int = nil) -> bool {
 
 	// Data rows
 	for row, row_idx in t.rows {
-		if !write_row(w, t, row.cells[:], widths, row.style, n) do return false
+		if !write_row(w, t, row.cells[:], widths, row.style, n, mode) do return false
 
 		if t.border.row_separator && row_idx < len(t.rows) - 1 {
 			if !write_border_line(w, t, widths, .MIDDLE, n) do return false
@@ -77,9 +84,9 @@ Returns:
 - string: The rendered table.
 - bool: true if rendering succeeded.
 */
-to_str :: proc(t: Table, allocator := context.allocator) -> (string, bool) #optional_ok {
+to_str :: proc(t: Table, mode: term.Render_Mode = .Full, allocator := context.allocator) -> (string, bool) #optional_ok {
 	sb := strings.builder_make(allocator = allocator)
-	ok := to_writer(strings.to_writer(&sb), t)
+	ok := to_writer(strings.to_writer(&sb), t, mode = mode)
 	return strings.to_string(sb), ok
 }
 
@@ -175,6 +182,7 @@ write_row :: proc(
 	widths: []int,
 	fallback_style: Maybe(style.Style),
 	n: ^int,
+	mode: term.Render_Mode,
 ) -> bool {
 	num_cols := len(t.columns)
 
@@ -209,7 +217,7 @@ write_row :: proc(
 		left_pad, right_pad := compute_alignment_padding(text_w, effective_width, alignment)
 		if !write_padding(w, left_pad, n) do return false
 
-		if !write_cell_content(w, content, text, fallback_style, n) do return false
+		if !write_cell_content(w, content, text, fallback_style, n, mode) do return false
 
 		if !write_padding(w, right_pad, n) do return false
 		if !write_padding(w, t.padding, n) do return false
@@ -233,6 +241,7 @@ write_cell_content :: proc(
 	text: string,
 	fallback_style: Maybe(style.Style),
 	n: ^int,
+	mode: term.Render_Mode,
 ) -> bool {
 	switch c in content {
 	case style.Styled_Text:
@@ -240,14 +249,14 @@ write_cell_content :: proc(
 			text  = text,
 			style = c.style,
 		}
-		return style.to_writer(w, st, n)
+		return style.to_writer(w, st, n, mode)
 	case string:
 		if s, has_style := fallback_style.?; has_style {
 			st := style.Styled_Text {
 				text  = text,
 				style = s,
 			}
-			return style.to_writer(w, st, n)
+			return style.to_writer(w, st, n, mode)
 		}
 		return write_str(w, text, n)
 	case:

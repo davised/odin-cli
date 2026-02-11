@@ -391,3 +391,58 @@ test_width_zero_unlimited :: proc(t: ^testing.T) {
 	expected := "my-project\n" + "├── very-long-filename.odin\n" + "└── another-long-file.txt\n"
 	testing.expect_value(t, strings.to_string(sb), expected)
 }
+
+@(test)
+test_plain_mode :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	styled_root := style.bold(style.red("root"))
+	styled_child := style.cyan("leaf")
+	children := [?]tree.Tree_Item{styled_child, "plain"}
+	tr := tree.Tree {
+		root     = styled_root,
+		children = children[:],
+	}
+
+	result, ok := tree.to_str(tr, mode = .Plain)
+	defer delete(result)
+	testing.expect(t, ok, "Plain to_str failed")
+
+	// No ANSI codes
+	testing.expect(t, !strings.contains(result, "\x1b["), "Plain should contain no ANSI codes")
+	// Tree connectors preserved (structural, not decorative)
+	testing.expect(t, strings.contains(result, "├──"), "Plain should keep tree connectors")
+	testing.expect(t, strings.contains(result, "└──"), "Plain should keep tree connectors")
+	// Content preserved
+	testing.expect(t, strings.contains(result, "root"), "Plain should preserve root text")
+	testing.expect(t, strings.contains(result, "leaf"), "Plain should preserve child text")
+	testing.expect(t, strings.contains(result, "plain"), "Plain should preserve plain child")
+}
+
+@(test)
+test_no_color_mode :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	styled_child := style.Styled_Text {
+		text = "styled",
+		style = style.Style {
+			text_styles = {.Bold},
+			foreground_color = style.ANSI_Color.Red,
+		},
+	}
+	children := [?]tree.Tree_Item{styled_child}
+	tr := tree.Tree {
+		root     = "root",
+		children = children[:],
+	}
+
+	result, ok := tree.to_str(tr, mode = .No_Color)
+	defer delete(result)
+	testing.expect(t, ok, "No_Color to_str failed")
+
+	// Bold SGR present, no color codes
+	testing.expect(t, strings.contains(result, "\x1b[1m"), "No_Color should keep bold")
+	testing.expect(t, strings.contains(result, "\x1b[0m"), "No_Color should have reset")
+	testing.expect(t, !strings.contains(result, "\x1b[31m"), "No_Color should not have red color")
+	testing.expect(t, strings.contains(result, "styled"), "No_Color should preserve text")
+}

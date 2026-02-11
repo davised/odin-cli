@@ -19,6 +19,7 @@ Render_State :: struct {
 	depth:              int,
 	max_width:          int,
 	prefix_width:       int, // cached cumulative display width of prefix[0..depth-1]
+	mode:               term.Render_Mode,
 }
 
 @(private = "file")
@@ -38,7 +39,7 @@ write_prefix :: proc(state: ^Render_State) -> bool {
 @(private = "file")
 write_styled :: proc(state: ^Render_State, text: string, is_styled: bool, s: style.Style) -> bool {
 	if is_styled {
-		style.to_writer(state.w, style.Styled_Text{text = text, style = s}, state.n) or_return
+		style.to_writer(state.w, style.Styled_Text{text = text, style = s}, state.n, state.mode) or_return
 	} else {
 		write_str(state, text) or_return
 	}
@@ -103,12 +104,13 @@ Inputs:
 Returns:
 	bool: true if rendering succeeded, false on write error or depth overflow.
 */
-to_writer :: proc(w: io.Writer, t: Tree, enumerator: Enumerator = DEFAULT_ENUMERATOR, n: ^int = nil) -> bool {
+to_writer :: proc(w: io.Writer, t: Tree, enumerator: Enumerator = DEFAULT_ENUMERATOR, n: ^int = nil, mode: term.Render_Mode = .Full) -> bool {
 	state := Render_State {
 		w                  = w,
 		n                  = n,
 		default_enumerator = enumerator,
 		max_width          = t.width,
+		mode               = mode,
 	}
 
 	// Write root line if present (unconstrained — no prefix or connector overhead)
@@ -140,13 +142,14 @@ Returns:
 to_str :: proc(
 	t: Tree,
 	enumerator: Enumerator = DEFAULT_ENUMERATOR,
+	mode: term.Render_Mode = .Full,
 	allocator := context.allocator,
 ) -> (
 	string,
 	bool,
 ) #optional_ok {
 	sb := strings.builder_make(allocator = allocator)
-	ok := to_writer(strings.to_writer(&sb), t, enumerator)
+	ok := to_writer(strings.to_writer(&sb), t, enumerator, mode = mode)
 	return strings.to_string(sb), ok
 }
 

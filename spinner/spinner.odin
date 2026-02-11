@@ -2,6 +2,7 @@
 package spinner
 
 import "../style"
+import "../term"
 import "core:io"
 import "core:mem"
 import "core:os"
@@ -19,6 +20,7 @@ Spinner :: struct {
 	frames:     Spinner_Frames,
 	message:    string,
 	text_style: Maybe(style.Style),
+	mode:       term.Render_Mode,
 	allocator:  mem.Allocator,
 	_mutex:     sync.Mutex, // guards message and _frame_idx
 	_stop:      b32, // atomic stop flag
@@ -61,11 +63,13 @@ spinner_circle :: proc() -> Spinner_Frames {
 	return Spinner_Frames{frames = frames[:], interval = 120 * time.Millisecond}
 }
 
-/* make_spinner creates a new spinner with the given configuration. */
+/* make_spinner creates a new spinner with the given configuration.
+	 mode auto-detects from stderr when not specified. */
 make_spinner :: proc(
 	frames: Maybe(Spinner_Frames) = nil,
 	message := "",
 	text_style: Maybe(style.Style) = nil,
+	mode: Maybe(term.Render_Mode) = nil,
 	allocator := context.allocator,
 ) -> Spinner {
 	f := frames.? or_else spinner_dots()
@@ -73,6 +77,7 @@ make_spinner :: proc(
 		frames = f,
 		message = message,
 		text_style = text_style,
+		mode = mode.? or_else term.detect_render_mode(os.stderr),
 		allocator = allocator,
 		_stop = false,
 		_thread = nil,
@@ -81,8 +86,14 @@ make_spinner :: proc(
 	}
 }
 
-/* start hides the cursor and spawns the animation thread. */
+/* start hides the cursor and spawns the animation thread.
+	 In Plain mode, marks running without cursor control or threads. */
 start :: proc(s: ^Spinner) {
+	if s.mode == .Plain {
+		s._running = true
+		return
+	}
+
 	w := os.stream_from_handle(os.stderr)
 	io.write_string(w, ansi.CSI + ansi.DECTCEM_HIDE)
 
@@ -99,9 +110,20 @@ start :: proc(s: ^Spinner) {
 }
 
 /* stop signals the thread to stop, joins it, clears the line, shows the cursor,
-	 and writes a final message with newline. */
+	 and writes a final message with newline.
+	 In Plain mode, writes the final message without terminal control sequences. */
 stop :: proc(s: ^Spinner, final_message := "") {
 	if !s._running do return
+
+	if s.mode == .Plain {
+		s._running = false
+		w := os.stream_from_handle(os.stderr)
+		if final_message != "" {
+			io.write_string(w, final_message)
+		}
+		io.write_string(w, "\n")
+		return
+	}
 
 	sync.atomic_store_explicit(&s._stop, true, .Release)
 

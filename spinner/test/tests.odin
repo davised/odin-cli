@@ -38,7 +38,11 @@ test_to_writer_no_message :: proc(t: ^testing.T) {
 test_to_writer_styled :: proc(t: ^testing.T) {
 	testing.set_fail_timeout(t, 5 * time.Second)
 
-	s := spinner.make_spinner(message = "Working", text_style = style.Style{foreground_color = style.ANSI_Color.Cyan})
+	s := spinner.make_spinner(
+		message = "Working",
+		text_style = style.Style{foreground_color = style.ANSI_Color.Cyan},
+		mode = .Full,
+	)
 	result, ok := spinner.to_str(s)
 	defer delete(result)
 
@@ -99,4 +103,43 @@ test_preset_frames :: proc(t: ^testing.T) {
 		testing.expect(t, len(frames.frames) > 0, "circle should have frames")
 		testing.expect(t, frames.interval > 0, "circle should have positive interval")
 	}
+}
+
+@(test)
+test_plain_mode :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	s := spinner.make_spinner(
+		message = "Loading",
+		text_style = style.Style{foreground_color = style.ANSI_Color.Cyan},
+		mode = .Plain,
+	)
+	result, ok := spinner.to_str(s)
+	defer delete(result)
+
+	testing.expect(t, ok, "Plain to_str should succeed")
+	testing.expect(t, !strings.contains(result, "\x1b["), "Plain should contain no ANSI codes")
+	testing.expect(t, strings.contains(result, "Loading"), "Plain should preserve message")
+	// Frame character still present (just without styling)
+	testing.expect(t, strings.has_prefix(result, "\u280B"), "Plain should still render frame char")
+}
+
+@(test)
+test_no_color_mode :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	s := spinner.make_spinner(
+		message = "Working",
+		text_style = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Cyan},
+		mode = .No_Color,
+	)
+	result, ok := spinner.to_str(s)
+	defer delete(result)
+
+	testing.expect(t, ok, "No_Color to_str should succeed")
+	// Bold SGR present, color stripped
+	testing.expect(t, strings.contains(result, "\x1b[1m"), "No_Color should keep bold")
+	testing.expect(t, strings.contains(result, "\x1b[0m"), "No_Color should have reset")
+	testing.expect(t, !strings.contains(result, "\x1b[36m"), "No_Color should not have cyan color")
+	testing.expect(t, strings.contains(result, "Working"), "No_Color should preserve message")
 }
