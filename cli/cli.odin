@@ -293,9 +293,21 @@ make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 			apply_counts(&model, Flags_Type, preprocess_result.counts)
 		}
 
-		// XOR group validation.
-		if xor_err := validate_xor_groups(&model, Flags_Type, all_flags); len(xor_err) > 0 {
-			write_validation_error(stderr, xor_err, program, app.parsing_style, app.theme, mode)
+		// Group validation (xor, one_of, any_of, together).
+		if group_err := validate_groups(&model, Flags_Type, all_flags, app.parsing_style); len(group_err) > 0 {
+			write_validation_error(stderr, group_err, program, app.parsing_style, app.theme, mode)
+			return 1
+		}
+
+		// Range validation.
+		if range_err := validate_ranges(&model, Flags_Type, all_flags, app.parsing_style, processed_args); len(range_err) > 0 {
+			write_validation_error(stderr, range_err, program, app.parsing_style, app.theme, mode)
+			return 1
+		}
+
+		// Path validation.
+		if path_err := validate_paths(&model, Flags_Type, all_flags, app.parsing_style, processed_args); len(path_err) > 0 {
+			write_validation_error(stderr, path_err, program, app.parsing_style, app.theme, mode)
 			return 1
 		}
 
@@ -568,12 +580,27 @@ parse_or_exit :: proc(
 		apply_counts(model, T, preprocess_result.counts)
 	}
 
-	// XOR group validation.
-	if xor_err := validate_xor_groups(model, T, all_flags); len(xor_err) > 0 {
+	// Group validation (xor, one_of, any_of, together).
+	if group_err := validate_groups(model, T, all_flags, parsing_style); len(group_err) > 0 {
 		stderr := os.stream_from_handle(os.stderr)
 		theme := theme_override.? or_else default_theme()
-		write_validation_error(stderr, xor_err, program, parsing_style, theme, resolved_mode)
+		write_validation_error(stderr, group_err, program, parsing_style, theme, resolved_mode)
 		os.exit(1)
+	}
+
+	// Range and path validation.
+	{
+		stderr := os.stream_from_handle(os.stderr)
+		theme := theme_override.? or_else default_theme()
+
+		if range_err := validate_ranges(model, T, all_flags, parsing_style, processed_args); len(range_err) > 0 {
+			write_validation_error(stderr, range_err, program, parsing_style, theme, resolved_mode)
+			os.exit(1)
+		}
+		if path_err := validate_paths(model, T, all_flags, parsing_style, processed_args); len(path_err) > 0 {
+			write_validation_error(stderr, path_err, program, parsing_style, theme, resolved_mode)
+			os.exit(1)
+		}
 	}
 }
 
@@ -929,43 +956,289 @@ apply_counts :: proc(model: rawptr, type_id: typeid, counts: map[string]int) {
 	}
 }
 
-// validate_xor_groups checks that at most one flag per XOR group is set.
-// Returns an error message if >1 flag in a group is non-zero, or "" on success.
+// validate_groups checks flag group constraints (xor, one_of, any_of, together).
+// Returns an error message on violation, or "" on success.
 @(private = "file")
-validate_xor_groups :: proc(model: rawptr, type_id: typeid, flag_infos: []Flag_Info) -> (error_msg: string) {
-	// Group flags by xor_group name.
-	groups := make(map[string][dynamic]Flag_Info, allocator = context.temp_allocator)
+validate_groups :: proc(
+	model: rawptr,
+	type_id: typeid,
+	flag_infos: []Flag_Info,
+	parsing_style: flags.Parsing_Style,
+) -> (error_msg: string) {
+	prefix := flag_prefix_for_style(parsing_style)
+
+	// Collect flags into groups by name, preserving the mode from the first member.
+	Group_Entry :: struct {
+		mode:    Group_Mode,
+		members: [dynamic]Flag_Info,
+	}
+	groups := make(map[string]Group_Entry, allocator = context.temp_allocator)
 	for fi in flag_infos {
-		if len(fi.xor_group) == 0 do continue
-		if fi.xor_group not_in groups {
-			groups[fi.xor_group] = make([dynamic]Flag_Info, 0, 4, context.temp_allocator)
+		if len(fi.group.name) == 0 do continue
+		if fi.group.name not_in groups {
+			groups[fi.group.name] = Group_Entry{
+				mode    = fi.group.mode,
+				members = make([dynamic]Flag_Info, 0, 4, context.temp_allocator),
+			}
 		}
-		append(&groups[fi.xor_group], fi)
+		entry := &groups[fi.group.name]
+		assert(entry.mode == fi.group.mode, fmt.tprintf(
+			"Flag '%s' has group mode '%v' but group '%s' was declared as '%v'",
+			fi.field_name, fi.group.mode, fi.group.name, entry.mode,
+		))
+		append(&entry.members, fi)
 	}
 
 	model_any := any{model, type_id}
-
 	errors := make([dynamic]string, 0, len(groups), context.temp_allocator)
-	for group_name, members in groups {
-		set_names := make([dynamic]string, 0, len(members), context.temp_allocator)
-		for fi in members {
+
+	for group_name, entry in groups {
+		set_names := make([dynamic]string, 0, len(entry.members), context.temp_allocator)
+		all_names := make([dynamic]string, 0, len(entry.members), context.temp_allocator)
+		for fi in entry.members {
+			append(&all_names, fmt.tprintf("%s%s", prefix, fi.display_name))
 			field_val := reflect.struct_field_value_by_name(model_any, fi.field_name)
 			if field_val != nil && !is_zero_value(field_val) {
-				append(&set_names, fmt.tprintf("--%s", fi.display_name))
+				append(&set_names, fmt.tprintf("%s%s", prefix, fi.display_name))
 			}
 		}
-		if len(set_names) > 1 {
-			joined := strings.join(set_names[:], ", ", context.temp_allocator)
-			append(&errors, fmt.tprintf(
-				"Flags %s cannot be used together (group '%s').",
-				joined, group_name,
-			))
+
+		set_count := len(set_names)
+		total := len(entry.members)
+		all_joined := strings.join(all_names[:], ", ", context.temp_allocator)
+		set_joined := strings.join(set_names[:], ", ", context.temp_allocator)
+
+		switch entry.mode {
+		case .At_Most_One:
+			if set_count > 1 {
+				append(&errors, fmt.tprintf(
+					"Flags %s cannot be used together (group '%s').",
+					set_joined, group_name,
+				))
+			}
+		case .Exactly_One:
+			if set_count != 1 {
+				append(&errors, fmt.tprintf(
+					"Exactly one of %s must be specified (group '%s').",
+					all_joined, group_name,
+				))
+			}
+		case .At_Least_One:
+			if set_count == 0 {
+				append(&errors, fmt.tprintf(
+					"At least one of %s must be specified (group '%s').",
+					all_joined, group_name,
+				))
+			}
+		case .All_Or_None:
+			if set_count > 0 && set_count < total {
+				append(&errors, fmt.tprintf(
+					"Flags %s must all be specified together, or none at all (group '%s').",
+					all_joined, group_name,
+				))
+			}
 		}
 	}
+
 	if len(errors) > 0 {
 		return strings.join(errors[:], "\n", context.temp_allocator)
 	}
 	return ""
+}
+
+// validate_ranges checks that numeric flag values fall within min/max bounds.
+// Uses args to determine if a flag was explicitly provided (not relying on zero-value detection).
+// Returns an error message on violation, or "" on success.
+@(private = "file")
+validate_ranges :: proc(
+	model: rawptr,
+	type_id: typeid,
+	flag_infos: []Flag_Info,
+	parsing_style: flags.Parsing_Style,
+	args: []string,
+) -> (error_msg: string) {
+	prefix := flag_prefix_for_style(parsing_style)
+	model_any := any{model, type_id}
+	errors := make([dynamic]string, 0, 4, context.temp_allocator)
+
+	for fi in flag_infos {
+		has_min := fi.min_val != nil
+		has_max := fi.max_val != nil
+		if !has_min && !has_max do continue
+
+		// Skip if the flag was not explicitly provided on the command line.
+		if !was_flag_provided(fi, args, parsing_style) do continue
+
+		field_val := reflect.struct_field_value_by_name(model_any, fi.field_name)
+		if field_val == nil do continue
+
+		value, ok := get_numeric_value(field_val)
+		if !ok do continue
+
+		if min_v, min_ok := fi.min_val.?; min_ok && value < min_v {
+			if max_v, max_ok := fi.max_val.?; max_ok {
+				append(&errors, fmt.tprintf(
+					"Value %v for %s%s is out of range [%v, %v].",
+					format_range_val(value), prefix, fi.display_name,
+					format_range_val(min_v), format_range_val(max_v),
+				))
+			} else {
+				append(&errors, fmt.tprintf(
+					"Value %v for %s%s must be at least %v.",
+					format_range_val(value), prefix, fi.display_name,
+					format_range_val(min_v),
+				))
+			}
+			continue
+		}
+
+		if max_v, max_ok := fi.max_val.?; max_ok && value > max_v {
+			if min_v, min_ok := fi.min_val.?; min_ok {
+				append(&errors, fmt.tprintf(
+					"Value %v for %s%s is out of range [%v, %v].",
+					format_range_val(value), prefix, fi.display_name,
+					format_range_val(min_v), format_range_val(max_v),
+				))
+			} else {
+				append(&errors, fmt.tprintf(
+					"Value %v for %s%s must be at most %v.",
+					format_range_val(value), prefix, fi.display_name,
+					format_range_val(max_v),
+				))
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return strings.join(errors[:], "\n", context.temp_allocator)
+	}
+	return ""
+}
+
+// validate_paths checks that string flag values point to existing files/dirs/paths.
+// Uses args to determine if a flag was explicitly provided.
+// Returns an error message on violation, or "" on success.
+@(private = "file")
+validate_paths :: proc(
+	model: rawptr,
+	type_id: typeid,
+	flag_infos: []Flag_Info,
+	parsing_style: flags.Parsing_Style,
+	args: []string,
+) -> (error_msg: string) {
+	prefix := flag_prefix_for_style(parsing_style)
+	model_any := any{model, type_id}
+	errors := make([dynamic]string, 0, 4, context.temp_allocator)
+
+	for fi in flag_infos {
+		if !fi.file_exists && !fi.dir_exists && !fi.path_exists do continue
+
+		field_val := reflect.struct_field_value_by_name(model_any, fi.field_name)
+		if field_val == nil do continue
+
+		// For paths, skip only if the string is empty (not provided).
+		if is_zero_value(field_val) do continue
+
+		// Verify the field is a string type before casting.
+		field_ti := runtime.type_info_base(type_info_of(field_val.id))
+		if _, is_string := field_ti.variant.(runtime.Type_Info_String); !is_string do continue
+
+		path := (^string)(field_val.data)^
+		if len(path) == 0 do continue
+
+		exists := os.exists(path)
+		if !exists {
+			append(&errors, fmt.tprintf(
+				"Path '%s' for %s%s does not exist.",
+				path, prefix, fi.display_name,
+			))
+			continue
+		}
+
+		if fi.file_exists && os.is_dir(path) {
+			append(&errors, fmt.tprintf(
+				"Path '%s' for %s%s is not a file.",
+				path, prefix, fi.display_name,
+			))
+		} else if fi.dir_exists && !os.is_dir(path) {
+			append(&errors, fmt.tprintf(
+				"Path '%s' for %s%s is not a directory.",
+				path, prefix, fi.display_name,
+			))
+		}
+	}
+
+	if len(errors) > 0 {
+		return strings.join(errors[:], "\n", context.temp_allocator)
+	}
+	return ""
+}
+
+// was_flag_provided checks if a flag was explicitly provided in the command-line args.
+// Handles both --flag=value and --flag value forms, as well as positional args.
+@(private = "file")
+was_flag_provided :: proc(fi: Flag_Info, args: []string, parsing_style: flags.Parsing_Style) -> bool {
+	if fi.is_positional {
+		// Positional args: count non-flag args and check if enough were provided.
+		pos_count := 0
+		for arg in args {
+			if len(arg) > 0 && arg[0] == '-' do continue
+			if pos_count == fi.pos do return true
+			pos_count += 1
+		}
+		return false
+	}
+
+	prefix := flag_prefix_for_style(parsing_style)
+	long_flag := fmt.tprintf("%s%s", prefix, fi.display_name)
+
+	for arg in args {
+		if arg == long_flag do return true
+		if strings.has_prefix(arg, long_flag) && len(arg) > len(long_flag) && arg[len(long_flag)] == '=' {
+			return true
+		}
+	}
+	return false
+}
+
+// get_numeric_value extracts a float64 from a reflected integer or float value.
+@(private = "file")
+get_numeric_value :: proc(val: any) -> (value: f64, ok: bool) {
+	ti := runtime.type_info_base(type_info_of(val.id))
+
+	#partial switch info in ti.variant {
+	case runtime.Type_Info_Integer:
+		if info.signed {
+			switch ti.size {
+			case 1: return f64((^i8)(val.data)^), true
+			case 2: return f64((^i16)(val.data)^), true
+			case 4: return f64((^i32)(val.data)^), true
+			case 8: return f64((^i64)(val.data)^), true
+			}
+		} else {
+			switch ti.size {
+			case 1: return f64((^u8)(val.data)^), true
+			case 2: return f64((^u16)(val.data)^), true
+			case 4: return f64((^u32)(val.data)^), true
+			case 8: return f64((^u64)(val.data)^), true
+			}
+		}
+	case runtime.Type_Info_Float:
+		switch ti.size {
+		case 4: return f64((^f32)(val.data)^), true
+		case 8: return (^f64)(val.data)^, true
+		}
+	}
+	return 0, false
+}
+
+// format_range_val displays a number without decimal point if it's a whole number.
+@(private)
+format_range_val :: proc(v: f64) -> string {
+	if v == f64(int(v)) {
+		return fmt.tprintf("%d", int(v))
+	}
+	return fmt.tprintf("%g", v)
 }
 
 // write_validation_error renders a styled validation error with a help hint footer.

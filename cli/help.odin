@@ -430,9 +430,41 @@ add_option_rows :: proc(
 build_meta :: proc(info: Flag_Info, theme: Theme, defaults_any: any = nil) -> table.Cell_Content {
 	segments := make([dynamic]style.Styled_Text, 0, 4, context.temp_allocator)
 
-	if len(info.xor_group) > 0 {
-		append(&segments, style.Styled_Text{text = fmt.tprintf("[xor: %s]", info.xor_group), style = theme.meta_style})
+	if len(info.group.name) > 0 {
+		label: string
+		switch info.group.mode {
+		case .At_Most_One:  label = fmt.tprintf("[xor: %s]", info.group.name)
+		case .Exactly_One:  label = fmt.tprintf("[one of: %s]", info.group.name)
+		case .At_Least_One: label = fmt.tprintf("[any of: %s]", info.group.name)
+		case .All_Or_None:  label = fmt.tprintf("[together: %s]", info.group.name)
+		}
+		append(&segments, style.Styled_Text{text = label, style = theme.meta_style})
 	}
+
+	// Range constraints.
+	if min, min_ok := info.min_val.?; min_ok {
+		if max, max_ok := info.max_val.?; max_ok {
+			append(&segments, style.Styled_Text{
+				text = fmt.tprintf("[%v..%v]", format_range_val(min), format_range_val(max)),
+				style = theme.meta_style,
+			})
+		} else {
+			append(&segments, style.Styled_Text{
+				text = fmt.tprintf("[min: %v]", format_range_val(min)),
+				style = theme.meta_style,
+			})
+		}
+	} else if max, max_ok := info.max_val.?; max_ok {
+		append(&segments, style.Styled_Text{
+			text = fmt.tprintf("[max: %v]", format_range_val(max)),
+			style = theme.meta_style,
+		})
+	}
+
+	// Path constraints.
+	if info.file_exists { append(&segments, style.Styled_Text{text = "[file]", style = theme.meta_style}) }
+	if info.dir_exists  { append(&segments, style.Styled_Text{text = "[directory]", style = theme.meta_style}) }
+	if info.path_exists { append(&segments, style.Styled_Text{text = "[path]", style = theme.meta_style}) }
 
 	if len(info.env_var) > 0 {
 		append(&segments, style.Styled_Text{text = fmt.tprintf("[env: %s]", info.env_var), style = theme.env_style})

@@ -6,24 +6,43 @@ import "core:reflect"
 import "core:strconv"
 import "core:strings"
 
+// Group_Mode defines the constraint semantics for a flag group.
+Group_Mode :: enum {
+	At_Most_One,  // xor — at most one flag in the group may be set
+	Exactly_One,  // one_of — exactly one flag must be set
+	At_Least_One, // any_of — at least one flag must be set
+	All_Or_None,  // together — all flags set or none set
+}
+
+// Flag_Group identifies a named constraint group and its mode.
+Flag_Group :: struct {
+	name: string,
+	mode: Group_Mode,
+}
+
 // Flag_Info holds metadata extracted from a core:flags-annotated struct field.
 Flag_Info :: struct {
-	field_name:       string,   // Odin struct field name (for panel matching)
-	display_name:     string,   // CLI name (underscores -> hyphens, or name= override)
-	usage:            string,   // from `usage` tag
-	type_description: string,   // "<int>", "<string>", etc.
-	short_name:       string,   // single char, e.g. "v" (from args:"short=v")
-	env_var:          string,   // env var name (from args:"env=VAR")
-	enum_names:       []string, // enum variant names (from Type_Info_Enum)
-	pos:              int,      // positional index, or -1
+	field_name:       string,      // Odin struct field name (for panel matching)
+	display_name:     string,      // CLI name (underscores -> hyphens, or name= override)
+	usage:            string,      // from `usage` tag
+	type_description: string,      // "<int>", "<string>", etc.
+	short_name:       string,      // single char, e.g. "v" (from args:"short=v")
+	env_var:          string,      // env var name (from args:"env=VAR")
+	enum_names:       []string,    // enum variant names (from Type_Info_Enum)
+	pos:              int,         // positional index, or -1
 	is_positional:    bool,
 	is_required:      bool,
 	is_boolean:       bool,
 	is_hidden:        bool,
-	is_greedy:        bool,     // from args:"greedy" — short-circuits before parse
-	is_count:         bool,     // from args:"count" — int field, accumulates via repeated short flags
-	is_enum:          bool,     // auto-detected from field type
-	xor_group:        string,   // from args:"xor=group" — mutually exclusive group name
+	is_greedy:        bool,        // from args:"greedy" — short-circuits before parse
+	is_count:         bool,        // from args:"count" — int field, accumulates via repeated short flags
+	is_enum:          bool,        // auto-detected from field type
+	group:            Flag_Group,  // constraint group (zero value = no group)
+	min_val:          Maybe(f64),  // from args:"min=N"
+	max_val:          Maybe(f64),  // from args:"max=N"
+	file_exists:      bool,        // from args:"file_exists"
+	dir_exists:       bool,        // from args:"dir_exists"
+	path_exists:      bool,        // from args:"path_exists"
 }
 
 // Tag constants matching core:flags.
@@ -49,6 +68,22 @@ SUBTAG_GREEDY :: "greedy"
 SUBTAG_COUNT :: "count"
 @(private = "file")
 SUBTAG_XOR :: "xor"
+@(private = "file")
+SUBTAG_ONE_OF :: "one_of"
+@(private = "file")
+SUBTAG_ANY_OF :: "any_of"
+@(private = "file")
+SUBTAG_TOGETHER :: "together"
+@(private = "file")
+SUBTAG_MIN :: "min"
+@(private = "file")
+SUBTAG_MAX :: "max"
+@(private = "file")
+SUBTAG_FILE_EXISTS :: "file_exists"
+@(private = "file")
+SUBTAG_DIR_EXISTS :: "dir_exists"
+@(private = "file")
+SUBTAG_PATH_EXISTS :: "path_exists"
 
 // extract_flags introspects a core:flags-annotated struct type and returns
 // a slice of Flag_Info describing each field. Uses temp_allocator.
@@ -89,9 +124,33 @@ extract_flags :: proc(data_type: typeid) -> []Flag_Info {
 			if _, has_count := get_subtag(args_tag, SUBTAG_COUNT); has_count {
 				info.is_count = true
 			}
+			// Group tags (mutually exclusive — a flag can only be in one group).
 			if xor_val, has_xor := get_subtag(args_tag, SUBTAG_XOR); has_xor {
-				info.xor_group = xor_val
+				info.group = {name = xor_val, mode = .At_Most_One}
+			} else if val, ok := get_subtag(args_tag, SUBTAG_ONE_OF); ok {
+				info.group = {name = val, mode = .Exactly_One}
+			} else if val, ok := get_subtag(args_tag, SUBTAG_ANY_OF); ok {
+				info.group = {name = val, mode = .At_Least_One}
+			} else if val, ok := get_subtag(args_tag, SUBTAG_TOGETHER); ok {
+				info.group = {name = val, mode = .All_Or_None}
 			}
+
+			// Range tags.
+			if min_str, has_min := get_subtag(args_tag, SUBTAG_MIN); has_min {
+				if v, parse_ok := strconv.parse_f64(min_str); parse_ok {
+					info.min_val = v
+				}
+			}
+			if max_str, has_max := get_subtag(args_tag, SUBTAG_MAX); has_max {
+				if v, parse_ok := strconv.parse_f64(max_str); parse_ok {
+					info.max_val = v
+				}
+			}
+
+			// Path tags.
+			if _, ok := get_subtag(args_tag, SUBTAG_FILE_EXISTS); ok { info.file_exists = true }
+			if _, ok := get_subtag(args_tag, SUBTAG_DIR_EXISTS); ok { info.dir_exists = true }
+			if _, ok := get_subtag(args_tag, SUBTAG_PATH_EXISTS); ok { info.path_exists = true }
 		}
 
 		// Auto-detect enum types.

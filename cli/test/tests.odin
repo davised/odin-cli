@@ -679,7 +679,7 @@ test_preprocess_count_and_value :: proc(t: ^testing.T) {
 	testing.expect_value(t, count, 2)
 }
 
-// --- XOR group tests ---
+// --- Group tests ---
 
 @(test)
 test_extract_flags_xor_group :: proc(t: ^testing.T) {
@@ -689,18 +689,84 @@ test_extract_flags_xor_group :: proc(t: ^testing.T) {
 		toml: bool `args:"xor=format" usage:"Output as TOML"`,
 	}
 	infos := cli.extract_flags(Opts)
-	testing.expect_value(t, infos[0].xor_group, "format")
-	testing.expect_value(t, infos[1].xor_group, "format")
-	testing.expect_value(t, infos[2].xor_group, "format")
+	testing.expect_value(t, infos[0].group.name, "format")
+	testing.expect_value(t, infos[0].group.mode, cli.Group_Mode.At_Most_One)
+	testing.expect_value(t, infos[1].group.name, "format")
+	testing.expect_value(t, infos[2].group.name, "format")
 }
 
 @(test)
-test_extract_flags_no_xor :: proc(t: ^testing.T) {
+test_extract_flags_no_group :: proc(t: ^testing.T) {
 	Opts :: struct {
 		verbose: bool `usage:"Verbose"`,
 	}
 	infos := cli.extract_flags(Opts)
-	testing.expect_value(t, infos[0].xor_group, "")
+	testing.expect_value(t, infos[0].group.name, "")
+}
+
+@(test)
+test_extract_flags_group_modes :: proc(t: ^testing.T) {
+	Opts :: struct {
+		a: bool `args:"one_of=pick" usage:"A"`,
+		b: bool `args:"any_of=acts" usage:"B"`,
+		c: bool `args:"together=auth" usage:"C"`,
+	}
+	infos := cli.extract_flags(Opts)
+	testing.expect_value(t, infos[0].group.name, "pick")
+	testing.expect_value(t, infos[0].group.mode, cli.Group_Mode.Exactly_One)
+	testing.expect_value(t, infos[1].group.name, "acts")
+	testing.expect_value(t, infos[1].group.mode, cli.Group_Mode.At_Least_One)
+	testing.expect_value(t, infos[2].group.name, "auth")
+	testing.expect_value(t, infos[2].group.mode, cli.Group_Mode.All_Or_None)
+}
+
+// --- Min/max tag extraction ---
+
+@(test)
+test_extract_flags_min_max :: proc(t: ^testing.T) {
+	Opts :: struct {
+		port: int `args:"min=1,max=65535" usage:"Port"`,
+	}
+	infos := cli.extract_flags(Opts)
+	min_v, min_ok := infos[0].min_val.?
+	max_v, max_ok := infos[0].max_val.?
+	testing.expect(t, min_ok, "Should have min_val")
+	testing.expect(t, max_ok, "Should have max_val")
+	testing.expect_value(t, min_v, 1.0)
+	testing.expect_value(t, max_v, 65535.0)
+}
+
+@(test)
+test_extract_flags_min_only :: proc(t: ^testing.T) {
+	Opts :: struct {
+		count: int `args:"min=0" usage:"Count"`,
+	}
+	infos := cli.extract_flags(Opts)
+	min_v, min_ok := infos[0].min_val.?
+	testing.expect(t, min_ok, "Should have min_val")
+	testing.expect_value(t, min_v, 0.0)
+	testing.expect_value(t, infos[0].max_val, nil)
+}
+
+// --- Path tag extraction ---
+
+@(test)
+test_extract_flags_path_tags :: proc(t: ^testing.T) {
+	Opts :: struct {
+		input:  string `args:"file_exists" usage:"Input"`,
+		outdir: string `args:"dir_exists" usage:"Output dir"`,
+		any:    string `args:"path_exists" usage:"Any path"`,
+		plain:  string `usage:"No path check"`,
+	}
+	infos := cli.extract_flags(Opts)
+	testing.expect_value(t, infos[0].file_exists, true)
+	testing.expect_value(t, infos[0].dir_exists, false)
+	testing.expect_value(t, infos[1].dir_exists, true)
+	testing.expect_value(t, infos[1].file_exists, false)
+	testing.expect_value(t, infos[2].path_exists, true)
+	testing.expect_value(t, infos[3].file_exists, false)
+	testing.expect_value(t, infos[3].dir_exists, false)
+	testing.expect_value(t, infos[3].path_exists, false)
 }
 
 @(test)
@@ -1187,4 +1253,387 @@ test_write_help_narrow_terminal :: proc(t: ^testing.T) {
 	// Should NOT contain table sections.
 	testing.expect(t, !strings.contains(output, "Arguments:"), "narrow help should not include Arguments section")
 	testing.expect(t, !strings.contains(output, "Options:"), "narrow help should not include Options section")
+}
+
+// --- Exactly_One group validation tests ---
+
+@(private = "file")
+exactly_one_action :: proc(opts: ^Exactly_One_Opts, program: string) -> int { return 0 }
+
+Exactly_One_Opts :: struct {
+	json: bool `args:"one_of=format" usage:"JSON"`,
+	yaml: bool `args:"one_of=format" usage:"YAML"`,
+	toml: bool `args:"one_of=format" usage:"TOML"`,
+}
+
+@(test)
+test_exactly_one_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("eo-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Exactly_One_Opts, "run", action = exactly_one_action)
+	code := cli.run(&app, {"eo-test", "run", "--json"})
+	testing.expect_value(t, code, 0)
+}
+
+@(test)
+test_exactly_one_none_fails :: proc(t: ^testing.T) {
+	app := cli.make_app("eo-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Exactly_One_Opts, "run", action = exactly_one_action)
+	code := cli.run(&app, {"eo-test", "run"})
+	testing.expect_value(t, code, 1)
+}
+
+@(test)
+test_exactly_one_multiple_fails :: proc(t: ^testing.T) {
+	app := cli.make_app("eo-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Exactly_One_Opts, "run", action = exactly_one_action)
+	code := cli.run(&app, {"eo-test", "run", "--json", "--yaml"})
+	testing.expect_value(t, code, 1)
+}
+
+// --- At_Least_One group validation tests ---
+
+@(private = "file")
+at_least_one_action :: proc(opts: ^At_Least_One_Opts, program: string) -> int { return 0 }
+
+At_Least_One_Opts :: struct {
+	lint:  bool `args:"any_of=actions" usage:"Run linting"`,
+	test:  bool `args:"any_of=actions" usage:"Run tests"`,
+	build: bool `args:"any_of=actions" usage:"Run build"`,
+}
+
+@(test)
+test_at_least_one_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("al-test", allocator = context.temp_allocator)
+	cli.add_command(&app, At_Least_One_Opts, "run", action = at_least_one_action)
+	code := cli.run(&app, {"al-test", "run", "--lint", "--test"})
+	testing.expect_value(t, code, 0)
+}
+
+@(test)
+test_at_least_one_single_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("al-test", allocator = context.temp_allocator)
+	cli.add_command(&app, At_Least_One_Opts, "run", action = at_least_one_action)
+	code := cli.run(&app, {"al-test", "run", "--build"})
+	testing.expect_value(t, code, 0)
+}
+
+@(test)
+test_at_least_one_none_fails :: proc(t: ^testing.T) {
+	app := cli.make_app("al-test", allocator = context.temp_allocator)
+	cli.add_command(&app, At_Least_One_Opts, "run", action = at_least_one_action)
+	code := cli.run(&app, {"al-test", "run"})
+	testing.expect_value(t, code, 1)
+}
+
+// --- All_Or_None group validation tests ---
+
+@(private = "file")
+together_action :: proc(opts: ^Together_Opts, program: string) -> int { return 0 }
+
+Together_Opts :: struct {
+	user: string `args:"together=auth" usage:"Username"`,
+	pass: string `args:"together=auth" usage:"Password"`,
+}
+
+@(test)
+test_together_all_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("tg-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Together_Opts, "run", action = together_action)
+	code := cli.run(&app, {"tg-test", "run", "--user=admin", "--pass=secret"})
+	testing.expect_value(t, code, 0)
+}
+
+@(test)
+test_together_none_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("tg-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Together_Opts, "run", action = together_action)
+	code := cli.run(&app, {"tg-test", "run"})
+	testing.expect_value(t, code, 0)
+}
+
+@(test)
+test_together_partial_fails :: proc(t: ^testing.T) {
+	app := cli.make_app("tg-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Together_Opts, "run", action = together_action)
+	code := cli.run(&app, {"tg-test", "run", "--user=admin"})
+	testing.expect_value(t, code, 1)
+}
+
+// --- Range validation tests ---
+
+@(private = "file")
+range_action :: proc(opts: ^Range_Opts, program: string) -> int { return 0 }
+
+Range_Opts :: struct {
+	port: int `args:"min=1,max=65535" usage:"Port"`,
+}
+
+@(test)
+test_range_int_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("rng-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Range_Opts, "run", action = range_action)
+	code := cli.run(&app, {"rng-test", "run", "--port=8080"})
+	testing.expect_value(t, code, 0)
+}
+
+@(test)
+test_range_int_below_min :: proc(t: ^testing.T) {
+	app := cli.make_app("rng-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Range_Opts, "run", action = range_action)
+	// Explicitly providing --port=0 should fail since min=1.
+	code := cli.run(&app, {"rng-test", "run", "--port=0"})
+	testing.expect_value(t, code, 1)
+}
+
+@(test)
+test_range_int_negative_below_min :: proc(t: ^testing.T) {
+	app := cli.make_app("rng-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Range_Opts, "run", action = range_action)
+	code := cli.run(&app, {"rng-test", "run", "--port=-1"})
+	testing.expect_value(t, code, 1)
+}
+
+@(test)
+test_range_int_above_max :: proc(t: ^testing.T) {
+	app := cli.make_app("rng-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Range_Opts, "run", action = range_action)
+	code := cli.run(&app, {"rng-test", "run", "--port=99999"})
+	testing.expect_value(t, code, 1)
+}
+
+@(test)
+test_range_zero_skipped :: proc(t: ^testing.T) {
+	// Zero value should skip validation (field not provided).
+	app := cli.make_app("rng-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Range_Opts, "run", action = range_action)
+	code := cli.run(&app, {"rng-test", "run"})
+	testing.expect_value(t, code, 0)
+}
+
+@(private = "file")
+min_only_action :: proc(opts: ^Min_Only_Opts, program: string) -> int { return 0 }
+
+Min_Only_Opts :: struct {
+	count: int `args:"min=0" usage:"Count"`,
+}
+
+@(test)
+test_range_min_only_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("rng-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Min_Only_Opts, "run", action = min_only_action)
+	code := cli.run(&app, {"rng-test", "run", "--count=5"})
+	testing.expect_value(t, code, 0)
+}
+
+@(test)
+test_range_min_only_fail :: proc(t: ^testing.T) {
+	app := cli.make_app("rng-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Min_Only_Opts, "run", action = min_only_action)
+	code := cli.run(&app, {"rng-test", "run", "--count=-1"})
+	testing.expect_value(t, code, 1)
+}
+
+@(private = "file")
+max_only_action :: proc(opts: ^Max_Only_Opts, program: string) -> int { return 0 }
+
+Max_Only_Opts :: struct {
+	pct: int `args:"max=100" usage:"Percent"`,
+}
+
+@(test)
+test_range_max_only_fail :: proc(t: ^testing.T) {
+	app := cli.make_app("rng-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Max_Only_Opts, "run", action = max_only_action)
+	code := cli.run(&app, {"rng-test", "run", "--pct=200"})
+	testing.expect_value(t, code, 1)
+}
+
+@(test)
+test_range_max_only_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("rng-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Max_Only_Opts, "run", action = max_only_action)
+	code := cli.run(&app, {"rng-test", "run", "--pct=50"})
+	testing.expect_value(t, code, 0)
+}
+
+// --- Path validation tests ---
+
+@(private = "file")
+path_action :: proc(opts: ^Path_Opts, program: string) -> int { return 0 }
+
+Path_Opts :: struct {
+	input: string `args:"path_exists" usage:"Input path"`,
+}
+
+@(test)
+test_path_exists_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("path-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Path_Opts, "run", action = path_action)
+	code := cli.run(&app, {"path-test", "run", "--input=/tmp"})
+	testing.expect_value(t, code, 0)
+}
+
+@(test)
+test_path_exists_fail :: proc(t: ^testing.T) {
+	app := cli.make_app("path-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Path_Opts, "run", action = path_action)
+	code := cli.run(&app, {"path-test", "run", "--input=/nonexistent_path_xyz_123"})
+	testing.expect_value(t, code, 1)
+}
+
+@(private = "file")
+file_action :: proc(opts: ^File_Opts, program: string) -> int { return 0 }
+
+File_Opts :: struct {
+	input: string `args:"file_exists" usage:"Input file"`,
+}
+
+@(test)
+test_file_exists_fail_on_directory :: proc(t: ^testing.T) {
+	app := cli.make_app("file-test", allocator = context.temp_allocator)
+	cli.add_command(&app, File_Opts, "run", action = file_action)
+	// /tmp is a directory, not a file
+	code := cli.run(&app, {"file-test", "run", "--input=/tmp"})
+	testing.expect_value(t, code, 1)
+}
+
+@(private = "file")
+dir_action :: proc(opts: ^Dir_Opts, program: string) -> int { return 0 }
+
+Dir_Opts :: struct {
+	outdir: string `args:"dir_exists" usage:"Output dir"`,
+}
+
+@(test)
+test_dir_exists_pass :: proc(t: ^testing.T) {
+	app := cli.make_app("dir-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Dir_Opts, "run", action = dir_action)
+	code := cli.run(&app, {"dir-test", "run", "--outdir=/tmp"})
+	testing.expect_value(t, code, 0)
+}
+
+@(test)
+test_dir_exists_fail_on_file :: proc(t: ^testing.T) {
+	app := cli.make_app("dir-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Dir_Opts, "run", action = dir_action)
+	// /etc/hosts is a file, not a directory
+	code := cli.run(&app, {"dir-test", "run", "--outdir=/etc/hosts"})
+	testing.expect_value(t, code, 1)
+}
+
+@(test)
+test_path_empty_skipped :: proc(t: ^testing.T) {
+	// Empty string (not provided) should skip validation.
+	app := cli.make_app("path-test", allocator = context.temp_allocator)
+	cli.add_command(&app, Path_Opts, "run", action = path_action)
+	code := cli.run(&app, {"path-test", "run"})
+	testing.expect_value(t, code, 0)
+}
+
+// --- Help display for new features ---
+
+@(test)
+test_help_shows_range :: proc(t: ^testing.T) {
+	Opts :: struct {
+		port: int `args:"min=0,max=65535" usage:"Port number"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Plain})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "[0..65535]"), "Should show range in help")
+}
+
+@(test)
+test_help_shows_min_only :: proc(t: ^testing.T) {
+	Opts :: struct {
+		count: int `args:"min=0" usage:"Count"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Plain})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "[min: 0]"), "Should show min-only in help")
+}
+
+@(test)
+test_help_shows_max_only :: proc(t: ^testing.T) {
+	Opts :: struct {
+		pct: int `args:"max=100" usage:"Percent"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Plain})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "[max: 100]"), "Should show max-only in help")
+}
+
+@(test)
+test_help_shows_group_mode :: proc(t: ^testing.T) {
+	Opts :: struct {
+		json: bool `args:"one_of=format" usage:"JSON"`,
+		yaml: bool `args:"one_of=format" usage:"YAML"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Plain})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "[one of: format]"), "Should show one_of group mode in help")
+}
+
+@(test)
+test_help_shows_file_constraint :: proc(t: ^testing.T) {
+	Opts :: struct {
+		input: string `args:"file_exists" usage:"Input file"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Plain})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "[file]"), "Should show file constraint in help")
+}
+
+@(test)
+test_help_shows_dir_constraint :: proc(t: ^testing.T) {
+	Opts :: struct {
+		outdir: string `args:"dir_exists" usage:"Output dir"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Plain})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "[directory]"), "Should show directory constraint in help")
+}
+
+@(test)
+test_help_shows_path_constraint :: proc(t: ^testing.T) {
+	Opts :: struct {
+		any_path: string `args:"path_exists" usage:"Any path"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Plain})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "[path]"), "Should show path constraint in help")
 }
