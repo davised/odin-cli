@@ -91,20 +91,20 @@ add_command :: proc(
 ) {
 	// Monomorphized runner — Flags_Type is known at compile time here.
 	runner :: proc(cmd: ^Command, args: []string, program: string, app: ^App, mode: term.Render_Mode) -> int {
-		model: Flags_Type
+		// Greedy: intercept --help before parsing so it works even with invalid flags.
+		if is_help_flag(args, app.parsing_style) {
+			stdout := os.stream_from_handle(os.stdout)
+			write_help(
+				stdout, Flags_Type, program, app.parsing_style,
+				nil, cmd.panel_config, app.theme,
+				cmd.description, "", app.max_width, mode,
+			)
+			return 0
+		}
 
+		model: Flags_Type
 		error := flags.parse(&model, args, app.parsing_style)
 		if error != nil {
-			_, is_help := error.(flags.Help_Request)
-			if is_help {
-				stdout := os.stream_from_handle(os.stdout)
-				write_help(
-					stdout, Flags_Type, program, app.parsing_style,
-					nil, cmd.panel_config, app.theme,
-					cmd.description, "", app.max_width, mode,
-				)
-				return 0
-			}
 			stderr := os.stream_from_handle(os.stderr)
 			write_error(stderr, Flags_Type, error, program, app.parsing_style, app.theme, mode)
 			return 1
@@ -232,18 +232,9 @@ parse_or_exit :: proc(
 
 	resolved_mode := resolve_mode(mode)
 
-	// Check for --version before parsing.
-	if len(version) > 0 && is_version_flag(args, parsing_style) {
-		stdout := os.stream_from_handle(os.stdout)
-		fmt.wprintfln(stdout, "%s %s", program, version)
-		os.exit(0)
-	}
-
-	error := flags.parse(model, args, parsing_style)
-	if error == nil do return
-
-	_, is_help := error.(flags.Help_Request)
-	if is_help {
+	// Greedy: intercept --help and --version before parsing, so they
+	// work even alongside invalid flags (e.g. `myapp --bad --help`).
+	if is_help_flag(args, parsing_style) {
 		stdout := os.stream_from_handle(os.stdout)
 		write_help(
 			stdout, T, program, parsing_style,
@@ -252,6 +243,14 @@ parse_or_exit :: proc(
 		)
 		os.exit(0)
 	}
+	if len(version) > 0 && is_version_flag(args, parsing_style) {
+		stdout := os.stream_from_handle(os.stdout)
+		fmt.wprintfln(stdout, "%s %s", program, version)
+		os.exit(0)
+	}
+
+	error := flags.parse(model, args, parsing_style)
+	if error == nil do return
 
 	// Parse error.
 	stderr := os.stream_from_handle(os.stderr)
