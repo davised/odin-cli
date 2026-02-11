@@ -8,41 +8,62 @@ Level_Style :: struct {
 	prefix_style: style.Style,
 }
 
-/* Key_Style defines how structured key=value fields are rendered. */
+/* Key_Style defines how structured key=value fields are rendered.
+   Numeric values are styled with value_number_style if set (non-zero);
+   otherwise they fall back to value_style. */
 Key_Style :: struct {
-	key_style:       style.Style,
-	separator:       string,
-	separator_style: style.Style,
-	value_style:     style.Style,
+	key_style:          style.Style,
+	separator:          string,
+	separator_style:    style.Style,
+	value_style:        style.Style,
+	value_number_style: style.Style,
 }
 
-/* default_level_styles returns colored and bold level prefixes. */
+/* default_level_styles returns colored and bold bracketed level prefixes.
+   Padded to 7 chars (length of "SUCCESS") inside brackets for alignment. */
 default_level_styles :: proc() -> [LEVEL_COUNT]Level_Style {
 	return {
-		// Debug: gray + bold
-		{prefix = "DEBU", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Bright_Black}},
-		// Info: blue + bold
-		{prefix = "INFO", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Blue}},
-		// Warning: yellow + bold
-		{prefix = "WARN", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Yellow}},
-		// Error: red + bold
-		{prefix = "ERRO", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Red}},
-		// Fatal: bright red + bold
-		{prefix = "FATA", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Bright_Red}},
+		// Trace: faint + gray
+		{prefix = "[TRACE  ]", prefix_style = {text_styles = {.Faint}, foreground_color = style.ANSI_Color.Bright_Black}},
+		// Debug: bold + gray
+		{prefix = "[DEBUG  ]", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Bright_Black}},
+		// Info: bold + blue
+		{prefix = "[INFO   ]", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Blue}},
+		// Hint: bold + cyan
+		{prefix = "[HINT   ]", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Cyan}},
+		// Success: bold + green
+		{prefix = "[SUCCESS]", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Green}},
+		// Warning: bold + yellow
+		{prefix = "[WARN   ]", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Yellow}},
+		// Error: bold + red
+		{prefix = "[ERROR  ]", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Red}},
+		// Fatal: bold + bright red
+		{prefix = "[FATAL  ]", prefix_style = {text_styles = {.Bold}, foreground_color = style.ANSI_Color.Bright_Red}},
 	}
 }
 
-/* plain_level_styles returns unstyled level prefixes. */
+/* plain_level_styles returns unstyled bracketed level prefixes. */
 plain_level_styles :: proc() -> [LEVEL_COUNT]Level_Style {
-	return {{prefix = "DEBU"}, {prefix = "INFO"}, {prefix = "WARN"}, {prefix = "ERRO"}, {prefix = "FATA"}}
+	return {
+		{prefix = "[TRACE  ]"},
+		{prefix = "[DEBUG  ]"},
+		{prefix = "[INFO   ]"},
+		{prefix = "[HINT   ]"},
+		{prefix = "[SUCCESS]"},
+		{prefix = "[WARN   ]"},
+		{prefix = "[ERROR  ]"},
+		{prefix = "[FATAL  ]"},
+	}
 }
 
-/* default_key_style returns key=value styling: cyan+faint keys, gray separator, unstyled values. */
+/* default_key_style returns key=value styling: cyan+faint keys, gray separator,
+   unstyled text values, yellow numeric values. */
 default_key_style :: proc() -> Key_Style {
 	return Key_Style {
-		key_style = {text_styles = {.Faint}, foreground_color = style.ANSI_Color.Cyan},
-		separator = "=",
-		separator_style = {foreground_color = style.ANSI_Color.Bright_Black},
+		key_style          = {text_styles = {.Faint}, foreground_color = style.ANSI_Color.Cyan},
+		separator          = "=",
+		separator_style    = {foreground_color = style.ANSI_Color.Bright_Black},
+		value_number_style = {foreground_color = style.ANSI_Color.Yellow},
 	}
 }
 

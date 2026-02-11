@@ -39,9 +39,9 @@ to_writer :: proc(
 	write_core(w, lgr, level, msg, use_color, n) or_return
 
 	// Caller location (at end for Mode A)
-	if lgr.show_caller {
+	if lgr.caller_format != .None {
 		write_str(w, " ", n) or_return
-		write_caller(w, location, lgr.caller_style, use_color, n) or_return
+		write_caller(w, location, lgr.caller_format, lgr.caller_style, use_color, n) or_return
 	}
 
 	return true
@@ -84,70 +84,82 @@ logger_formatter :: proc(fi: ^fmt.Info, arg: any, verb: rune) -> bool {
 // --- runtime.Logger_Proc implementation ---
 
 /* logger_proc implements runtime.Logger_Proc so the logger can be used with
-   context.logger. It respects the Terminal_Color option. */
-logger_proc :: proc(data: rawptr, level: Level, text: string, options: Options, location := #caller_location) {
+   context.logger. Maps runtime levels to our Level enum and iterates all
+   output sinks with per-sink level filtering. */
+logger_proc :: proc(data: rawptr, level: runtime.Logger_Level, text: string, options: Options, location := #caller_location) {
 	lgr := cast(^Logger)data
 	if lgr == nil do return
-	if level < lgr.lowest_level do return
 
-	// Use a copy so we can adjust options per-call without mutating the source.
-	local := lgr^
-	local.options = options
+	our_level := runtime_to_level(level)
+	if our_level < lgr.lowest_level do return
 
-	if to_writer(local.output, local, level, text, location) {
-		write_str(local.output, "\n", nil)
+	for i in 0 ..< lgr.output_count {
+		if our_level < lgr.outputs[i].level do continue
+		w := lgr.outputs[i].writer
+		use_color := lgr.outputs[i].use_color
+		if write_core(w, lgr^, our_level, text, use_color, nil) {
+			if lgr.caller_format != .None {
+				write_str(w, " ", nil)
+				write_caller(w, location, lgr.caller_format, lgr.caller_style, use_color, nil)
+			}
+			write_str(w, "\n", nil)
+		}
 	}
 }
 
 // --- Internal: direct logging for Mode B ---
 
-/* log_msg is the internal implementation for the direct log_debug/info/warn/error/fatal
-   procs. It formats ..any args as key=value pairs using fmt.tprint (via the temp
-   allocator) and writes the complete line plus newline. */
+/* log_msg is the internal implementation for the direct log_* procs. It formats
+   ..any args as key=value pairs using fmt.tprint (via the temp allocator) and
+   writes the complete line plus newline to each qualifying output sink. */
 @(private)
 log_msg :: proc(lgr: ^Logger, level: Level, msg: string, args: []any, loc: runtime.Source_Code_Location) {
 	if level < lgr.lowest_level do return
 
-	w := lgr.output
-	use_color := .Terminal_Color in lgr.options
+	for i in 0 ..< lgr.output_count {
+		if level < lgr.outputs[i].level do continue
+		w := lgr.outputs[i].writer
+		use_color := lgr.outputs[i].use_color
 
-	if !write_core(w, lgr^, level, msg, use_color, nil) do return
+		if !write_core(w, lgr^, level, msg, use_color, nil) do continue
 
-	// Inline key=value args (alternating key: any, value: any)
-	pairs := len(args) / 2
-	for i in 0 ..< pairs {
-		key_str := fmt.tprint(args[i * 2])
-		val_str := fmt.tprint(args[i * 2 + 1])
-		if !write_str(w, " ", nil) do return
-		if !write_field(w, key_str, val_str, lgr.key_style, use_color, nil) do return
+		// Inline key=value args (alternating key: any, value: any)
+		pairs := len(args) / 2
+		for j in 0 ..< pairs {
+			key_str := fmt.tprint(args[j * 2])
+			val_str := fmt.tprint(args[j * 2 + 1])
+			if !write_str(w, " ", nil) do break
+			if !write_field(w, key_str, val_str, lgr.key_style, use_color, nil) do break
+		}
+
+		// Caller location (after inline args for Mode B)
+		if lgr.caller_format != .None {
+			write_str(w, " ", nil)
+			write_caller(w, loc, lgr.caller_format, lgr.caller_style, use_color, nil)
+		}
+
+		write_str(w, "\n", nil)
 	}
-
-	// Caller location (after inline args for Mode B)
-	if lgr.show_caller {
-		if !write_str(w, " ", nil) do return
-		if !write_caller(w, loc, lgr.caller_style, use_color, nil) do return
-	}
-
-	write_str(w, "\n", nil)
 }
 
 // --- Shared rendering core ---
 
-/* write_core renders the common parts of a log line: timestamp, level, prefix,
-   message, and pre-bound fields. Both to_writer and log_msg call this. */
+/* write_core renders the common parts of a log line: level prefix, separator,
+   timestamp, prefix, message, and pre-bound fields. Both to_writer and log_msg
+   call this. Format: [LEVEL  ] --- HH:MM:SS prefix message key=value */
 @(private = "file")
 write_core :: proc(w: io.Writer, lgr: Logger, level: Level, msg: string, use_color: bool, n: ^int) -> bool {
+	// Level prefix
+	idx := level_to_index(level)
+	ls := lgr.level_styles[idx]
+	write_styled_str(w, ls.prefix, ls.prefix_style, use_color, n) or_return
+	write_str(w, " --- ", n) or_return
+
 	// Timestamp
 	if lgr.timestamp_format != .None {
 		write_timestamp(w, lgr.timestamp_format, lgr.timestamp_style, use_color, n) or_return
 		write_str(w, " ", n) or_return
 	}
-
-	// Level prefix
-	idx := level_to_index(level)
-	ls := lgr.level_styles[idx]
-	write_styled_str(w, ls.prefix, ls.prefix_style, use_color, n) or_return
-	write_str(w, " ", n) or_return
 
 	// Optional prefix
 	if lgr.prefix != "" {
@@ -197,26 +209,25 @@ is_zero_style :: proc(sty: style.Style) -> bool {
 	return sty.text_styles == {} && sty.foreground_color == nil && sty.background_color == nil
 }
 
-/* level_to_index maps Level enum values (0, 10, 20, 30, 40) to array indices 0-4. */
+/* level_to_index maps Level enum values to array indices 0-7. */
 @(private = "file")
 level_to_index :: proc(level: Level) -> int {
 	switch level {
-	case .Debug:
-		return 0
-	case .Info:
-		return 1
-	case .Warning:
-		return 2
-	case .Error:
-		return 3
-	case .Fatal:
-		return 4
+	case .Trace:   return 0
+	case .Debug:   return 1
+	case .Info:    return 2
+	case .Hint:    return 3
+	case .Success: return 4
+	case .Warning: return 5
+	case .Error:   return 6
+	case .Fatal:   return 7
 	}
 	unreachable()
 }
 
 /* write_timestamp writes the current time formatted according to the timestamp
-   format into the writer using a stack buffer. */
+   format into the writer using a stack buffer. Wraps in brackets to match
+   core:log style: [HH:MM:SS], [2006-01-02], [2006-01-02 HH:MM:SS]. */
 @(private = "file")
 write_timestamp :: proc(w: io.Writer, tf: Timestamp_Format, sty: style.Style, use_color: bool, n: ^int) -> bool {
 	if tf == .None do return true
@@ -225,8 +236,11 @@ write_timestamp :: proc(w: io.Writer, tf: Timestamp_Format, sty: style.Style, us
 	h, min, sec := time.clock_from_time(now)
 	y, mon, d := time.date(now)
 
-	buf: [20]u8 // "2006-01-02 15:04:05" = 19 chars max
+	buf: [22]u8 // "[2006-01-02 15:04:05]" = 21 chars max
 	pos := 0
+
+	buf[pos] = '['
+	pos += 1
 
 	if tf == .Date_Only || tf == .Date_Time {
 		pos = write_int4(buf[:], pos, clamp(y, 0, 9999))
@@ -253,41 +267,61 @@ write_timestamp :: proc(w: io.Writer, tf: Timestamp_Format, sty: style.Style, us
 		pos = write_int2(buf[:], pos, clamp(sec, 0, 99))
 	}
 
+	buf[pos] = ']'
+	pos += 1
+
 	ts := string(buf[:pos])
 	return write_styled_str(w, ts, sty, use_color, n)
 }
 
-/* write_field writes a single key=value field with optional styling. */
+/* write_field writes a single key=value field with optional styling.
+   Numeric values use value_number_style if set, otherwise value_style. */
 @(private = "file")
 write_field :: proc(w: io.Writer, key: string, value: string, ks: Key_Style, use_color: bool, n: ^int) -> bool {
 	write_styled_str(w, key, ks.key_style, use_color, n) or_return
 	write_styled_str(w, ks.separator, ks.separator_style, use_color, n) or_return
-	write_styled_str(w, value, ks.value_style, use_color, n) or_return
+	vs := ks.value_style
+	if is_numeric(value) && !is_zero_style(ks.value_number_style) {
+		vs = ks.value_number_style
+	}
+	write_styled_str(w, value, vs, use_color, n) or_return
 	return true
 }
 
-/* write_caller writes a caller location as <file:line>. Each component is
-   written directly to the writer to avoid fixed-buffer truncation. */
+/* write_caller writes a caller location in core:log bracket style.
+   Short: [file.odin:42:proc()]  Long: [/full/path/file.odin:42:proc()] */
 @(private = "file")
 write_caller :: proc(
 	w: io.Writer,
 	loc: runtime.Source_Code_Location,
+	format: Caller_Format,
 	sty: style.Style,
 	use_color: bool,
 	n: ^int,
 ) -> bool {
+	if format == .None do return true
+
+	file := loc.file_path
+	if format == .Short {
+		file = path_basename(loc.file_path)
+	}
+
 	line_buf: [16]u8
 	line_str := itoa(line_buf[:], int(loc.line))
 
 	if use_color && !is_zero_style(sty) {
-		// Build the caller string in a single styled span
 		caller_buf: [512]u8
 		pos := 0
-		pos = copy_to_buf(caller_buf[:], pos, "<")
-		pos = copy_to_buf(caller_buf[:], pos, loc.file_path)
+		pos = copy_to_buf(caller_buf[:], pos, "[")
+		pos = copy_to_buf(caller_buf[:], pos, file)
 		pos = copy_to_buf(caller_buf[:], pos, ":")
 		pos = copy_to_buf(caller_buf[:], pos, line_str)
-		pos = copy_to_buf(caller_buf[:], pos, ">")
+		if loc.procedure != "" {
+			pos = copy_to_buf(caller_buf[:], pos, ":")
+			pos = copy_to_buf(caller_buf[:], pos, loc.procedure)
+			pos = copy_to_buf(caller_buf[:], pos, "()")
+		}
+		pos = copy_to_buf(caller_buf[:], pos, "]")
 		st := style.Styled_Text {
 			text  = string(caller_buf[:pos]),
 			style = sty,
@@ -295,13 +329,56 @@ write_caller :: proc(
 		return style.to_writer(w, st, n)
 	}
 
-	// Plain mode: write components directly (no truncation risk)
-	write_str(w, "<", n) or_return
-	write_str(w, loc.file_path, n) or_return
+	write_str(w, "[", n) or_return
+	write_str(w, file, n) or_return
 	write_str(w, ":", n) or_return
 	write_str(w, line_str, n) or_return
-	write_str(w, ">", n) or_return
+	if loc.procedure != "" {
+		write_str(w, ":", n) or_return
+		write_str(w, loc.procedure, n) or_return
+		write_str(w, "()", n) or_return
+	}
+	write_str(w, "]", n) or_return
 	return true
+}
+
+/* is_numeric returns true if the string is a valid integer or decimal number
+   (e.g. "42", "-3.14", "+100", "0.5"). Does not match strings with units. */
+@(private = "file")
+is_numeric :: proc(s: string) -> bool {
+	if len(s) == 0 do return false
+	start := 0
+	if s[0] == '-' || s[0] == '+' {
+		start = 1
+	}
+	if start >= len(s) do return false
+	has_digit := false
+	has_dot := false
+	for i in start ..< len(s) {
+		switch s[i] {
+		case '0' ..= '9':
+			has_digit = true
+		case '.':
+			if has_dot do return false
+			has_dot = true
+		case:
+			return false
+		}
+	}
+	return has_digit
+}
+
+/* path_basename returns the filename portion of a path (after the last separator). */
+@(private = "file")
+path_basename :: proc(path: string) -> string {
+	i := len(path)
+	for i > 0 {
+		i -= 1
+		if path[i] == '/' || path[i] == '\\' {
+			return path[i + 1:]
+		}
+	}
+	return path
 }
 
 /* itoa converts a non-negative integer to a string in the provided buffer. */
