@@ -33,9 +33,9 @@ Submit_Flags :: struct {
 	name:      string   `args:"short=n,required" usage:"Job name (must be unique within the cluster queue)"`,
 	queue:     string   `args:"short=q" usage:"Target queue to submit the job to"`,
 	priority:  Priority `args:"short=p" usage:"Job priority level within the queue"`,
-	cpus:      int      `args:"short=j" usage:"Number of CPU cores to allocate for this job"`,
+	cpus:      int      `args:"short=j,min=0" usage:"Number of CPU cores to allocate for this job"`,
 	memory:    string   `args:"short=m" usage:"Memory limit per node (e.g. 4G, 512M). Jobs exceeding this limit will be killed by the scheduler."`,
-	gpus:      int      `usage:"Number of GPUs to allocate. Requires a GPU-enabled queue."`,
+	gpus:      int      `args:"min=0" usage:"Number of GPUs to allocate. Requires a GPU-enabled queue."`,
 	wall_time: string   `args:"short=t" usage:"Maximum wall time for the job (e.g. 2h, 30m). Jobs running longer than this will be terminated."`,
 	output:    string   `args:"short=o" usage:"Path for stdout log file. Supports substitution patterns like %j (job ID) and %N (node name)."`,
 	error_log: string   `args:"short=e,name=error" usage:"Path for stderr log file. Defaults to the same path as stdout if not specified."`,
@@ -54,12 +54,6 @@ submit_action :: proc(flags: ^Submit_Flags, program: string) -> int {
 	fmt.printfln("  Queue: %s, CPUs: %d, Memory: %s", flags.queue, flags.cpus, flags.memory)
 	if flags.dry_run do fmt.println("  (dry run - not actually submitted)")
 	return 0
-}
-
-submit_validator :: proc(flags: ^Submit_Flags) -> string {
-	if flags.cpus < 0 do return "CPU count must be non-negative."
-	if flags.gpus < 0 do return "GPU count must be non-negative."
-	return ""
 }
 
 // --- status subcommand ---
@@ -133,7 +127,6 @@ main :: proc() {
 			cli.Panel{name = "Advanced",   fields = {"array", "depend", "image"}},
 		},
 	)
-	cli.set_validator(&app, "submit", Submit_Flags, submit_validator)
 
 	cli.add_command(&app, Status_Flags, "status",
 		description = "Show job status",

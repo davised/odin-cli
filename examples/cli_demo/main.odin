@@ -5,11 +5,11 @@ import "core:os"
 import "../../cli"
 
 Options :: struct {
-	input:   string `args:"pos=0,required" usage:"Input file to process"`,
+	input:   string `args:"pos=0,required,file_exists" usage:"Input file to process"`,
 	output:  string `args:"pos=1" usage:"Output destination"`,
 	format:  string `usage:"Output format (text, json, yaml)"`,
 	verbose: bool   `usage:"Show verbose output"`,
-	count:   int    `usage:"Number of iterations"`,
+	count:   int    `args:"min=1,max=100" usage:"Number of iterations"`,
 	token:   string `args:"required" usage:"API auth token"`,
 	dry_run: bool   `usage:"Simulate without writing"`,
 	hidden:  string `args:"hidden" usage:"Internal debug flag"`,

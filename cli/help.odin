@@ -32,6 +32,7 @@ Help_Config :: struct {
 	global_flags:    []Flag_Info,
 	global_defaults: rawptr,
 	global_type:     Maybe(typeid),
+	default_command: string,
 }
 
 // write_help renders styled help output for a flags-annotated struct type.
@@ -293,10 +294,14 @@ write_help :: proc(
 
 		for cmd in commands {
 			if cmd.hidden do continue
+			desc := cmd.description
+			if len(config.default_command) > 0 && cmd.name == config.default_command {
+				desc = len(desc) > 0 ? fmt.tprintf("%s  [default]", desc) : "[default]"
+			}
 			table.add_row(
 				&t,
 				styled_content(cmd.name, theme.command_style),
-				styled_content(cmd.description, theme.description_style),
+				styled_content(desc, theme.description_style),
 			)
 		}
 
@@ -430,9 +435,41 @@ add_option_rows :: proc(
 build_meta :: proc(info: Flag_Info, theme: Theme, defaults_any: any = nil) -> table.Cell_Content {
 	segments := make([dynamic]style.Styled_Text, 0, 4, context.temp_allocator)
 
-	if len(info.xor_group) > 0 {
-		append(&segments, style.Styled_Text{text = fmt.tprintf("[xor: %s]", info.xor_group), style = theme.meta_style})
+	if len(info.group.name) > 0 {
+		label: string
+		switch info.group.mode {
+		case .At_Most_One:  label = fmt.tprintf("[xor: %s]", info.group.name)
+		case .Exactly_One:  label = fmt.tprintf("[one of: %s]", info.group.name)
+		case .At_Least_One: label = fmt.tprintf("[any of: %s]", info.group.name)
+		case .All_Or_None:  label = fmt.tprintf("[together: %s]", info.group.name)
+		}
+		append(&segments, style.Styled_Text{text = label, style = theme.meta_style})
 	}
+
+	// Range constraints.
+	if min, min_ok := info.min_val.?; min_ok {
+		if max, max_ok := info.max_val.?; max_ok {
+			append(&segments, style.Styled_Text{
+				text = fmt.tprintf("[%v..%v]", format_range_val(min), format_range_val(max)),
+				style = theme.meta_style,
+			})
+		} else {
+			append(&segments, style.Styled_Text{
+				text = fmt.tprintf("[min: %v]", format_range_val(min)),
+				style = theme.meta_style,
+			})
+		}
+	} else if max, max_ok := info.max_val.?; max_ok {
+		append(&segments, style.Styled_Text{
+			text = fmt.tprintf("[max: %v]", format_range_val(max)),
+			style = theme.meta_style,
+		})
+	}
+
+	// Path constraints.
+	if info.file_exists { append(&segments, style.Styled_Text{text = "[file]", style = theme.meta_style}) }
+	if info.dir_exists  { append(&segments, style.Styled_Text{text = "[directory]", style = theme.meta_style}) }
+	if info.path_exists { append(&segments, style.Styled_Text{text = "[path]", style = theme.meta_style}) }
 
 	if len(info.env_var) > 0 {
 		append(&segments, style.Styled_Text{text = fmt.tprintf("[env: %s]", info.env_var), style = theme.env_style})
@@ -462,23 +499,30 @@ build_meta :: proc(info: Flag_Info, theme: Theme, defaults_any: any = nil) -> ta
 }
 
 // format_enum_choices formats enum names as "{name1,name2,...}".
-// Names are lowercased with underscores replaced by hyphens to match
-// core:flags parsing convention.
+// normalize_enum_name lowercases an enum name and replaces underscores with
+// hyphens to match core:flags parsing convention.
+@(private)
+normalize_enum_name :: proc(name: string) -> string {
+	lower := strings.to_lower(name, context.temp_allocator)
+	replaced, _ := strings.replace_all(lower, "_", "-", context.temp_allocator)
+	return replaced
+}
+
+// format_enum_choices returns enum names as "{a,b,c}" for help display.
 @(private = "file")
 format_enum_choices :: proc(names: []string) -> string {
 	sb := strings.builder_make(context.temp_allocator)
 	strings.write_byte(&sb, '{')
 	for name, i in names {
 		if i > 0 do strings.write_byte(&sb, ',')
-		lower := strings.to_lower(name, context.temp_allocator)
-		replaced, _ := strings.replace_all(lower, "_", "-", context.temp_allocator)
-		strings.write_string(&sb, replaced)
+		strings.write_string(&sb, normalize_enum_name(name))
 	}
 	strings.write_byte(&sb, '}')
 	return strings.to_string(sb)
 }
 
 // is_zero_value checks if a reflected value is the zero value for its type.
+@(private)
 is_zero_value :: proc(val: any) -> bool {
 	if val == nil do return true
 
