@@ -32,6 +32,7 @@ Help_Config :: struct {
 	global_flags:    []Flag_Info,
 	global_defaults: rawptr,
 	global_type:     Maybe(typeid),
+	default_command: string,
 }
 
 // write_help renders styled help output for a flags-annotated struct type.
@@ -293,10 +294,14 @@ write_help :: proc(
 
 		for cmd in commands {
 			if cmd.hidden do continue
+			desc := cmd.description
+			if len(config.default_command) > 0 && cmd.name == config.default_command {
+				desc = len(desc) > 0 ? fmt.tprintf("%s  [default]", desc) : "[default]"
+			}
 			table.add_row(
 				&t,
 				styled_content(cmd.name, theme.command_style),
-				styled_content(cmd.description, theme.description_style),
+				styled_content(desc, theme.description_style),
 			)
 		}
 
@@ -494,17 +499,23 @@ build_meta :: proc(info: Flag_Info, theme: Theme, defaults_any: any = nil) -> ta
 }
 
 // format_enum_choices formats enum names as "{name1,name2,...}".
-// Names are lowercased with underscores replaced by hyphens to match
-// core:flags parsing convention.
+// normalize_enum_name lowercases an enum name and replaces underscores with
+// hyphens to match core:flags parsing convention.
+@(private)
+normalize_enum_name :: proc(name: string) -> string {
+	lower := strings.to_lower(name, context.temp_allocator)
+	replaced, _ := strings.replace_all(lower, "_", "-", context.temp_allocator)
+	return replaced
+}
+
+// format_enum_choices returns enum names as "{a,b,c}" for help display.
 @(private = "file")
 format_enum_choices :: proc(names: []string) -> string {
 	sb := strings.builder_make(context.temp_allocator)
 	strings.write_byte(&sb, '{')
 	for name, i in names {
 		if i > 0 do strings.write_byte(&sb, ',')
-		lower := strings.to_lower(name, context.temp_allocator)
-		replaced, _ := strings.replace_all(lower, "_", "-", context.temp_allocator)
-		strings.write_string(&sb, replaced)
+		strings.write_string(&sb, normalize_enum_name(name))
 	}
 	strings.write_byte(&sb, '}')
 	return strings.to_string(sb)

@@ -55,12 +55,15 @@ App :: struct {
 	parsing_style:       flags.Parsing_Style,
 	max_width:           int,
 	allocator:           runtime.Allocator,
+	_default_command:    string,
 	_global_flags_type:  typeid,
 	_global_flags_ptr:   rawptr,
 	_global_parse_proc:  _Global_Parse_Proc,
 }
 
 // make_app creates a new App. Call destroy_app when done.
+// default_command names a command to run when no subcommand is given
+// (e.g. when the user passes only flags, or no args at all).
 make_app :: proc(
 	name: string,
 	description: string = "",
@@ -68,17 +71,19 @@ make_app :: proc(
 	theme_override: Maybe(Theme) = nil,
 	parsing_style: flags.Parsing_Style = .Unix,
 	max_width: int = 0,
+	default_command: string = "",
 	allocator := context.allocator,
 ) -> App {
 	return App {
-		name          = name,
-		description   = description,
-		version       = version,
-		commands      = make([dynamic]Command, allocator),
-		theme         = theme_override.? or_else default_theme(),
-		parsing_style = parsing_style,
-		max_width     = max_width,
-		allocator     = allocator,
+		name             = name,
+		description      = description,
+		version          = version,
+		commands         = make([dynamic]Command, allocator),
+		theme            = theme_override.? or_else default_theme(),
+		parsing_style    = parsing_style,
+		max_width        = max_width,
+		_default_command = default_command,
+		allocator        = allocator,
 	}
 }
 
@@ -351,6 +356,17 @@ make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 	return runner
 }
 
+// dispatch_default dispatches to the app's default command if one is configured.
+// Returns (exit_code, true) if dispatched, (0, false) if no default command.
+@(private = "file")
+dispatch_default :: proc(app: ^App, program: string, args: []string, mode: term.Render_Mode) -> (int, bool) {
+	if len(app._default_command) == 0 do return 0, false
+	cmd := find_command(app.commands[:], app._default_command)
+	if cmd == nil do return 0, false
+	cmd_program := fmt.tprintf("%s %s", program, cmd.name)
+	return cmd._run_proc(cmd, args, cmd_program, app, mode), true
+}
+
 // dispatch_subcommand tries to match the first arg against subcommands.
 // Returns (exit_code, true) if dispatched, (0, false) if no match.
 @(private = "file")
@@ -383,29 +399,38 @@ run :: proc(app: ^App, program_args: []string) -> int {
 
 	Empty :: struct {}
 
+	// Validate default command configuration.
+	if len(app._default_command) > 0 {
+		if find_command(app.commands[:], app._default_command) == nil {
+			panic(fmt.tprintf("default_command '%s' not found in registered commands", app._default_command))
+		}
+	}
+
 	// Resolve global flags info for help rendering.
 	global_infos: []Flag_Info
 	if app._global_parse_proc != nil {
 		global_infos = extract_flags(app._global_flags_type)
 	}
 
-	// No args: show app help with error exit.
+	// Build reusable help config for app-level help.
+	app_help := Help_Config{
+		parsing_style = app.parsing_style,
+		commands = app.commands[:],
+		theme = app.theme,
+		description = app.description,
+		version = app.version,
+		max_width = app.max_width,
+		mode = mode,
+		global_flags = global_infos,
+		global_defaults = app._global_flags_ptr,
+		global_type = app._global_flags_type,
+		default_command = app._default_command,
+	}
+
+	// No args: dispatch to default command, or show app help.
 	if len(args) == 0 {
-		write_help(
-			stdout, Empty, program,
-			Help_Config{
-				parsing_style = app.parsing_style,
-				commands = app.commands[:],
-				theme = app.theme,
-				description = app.description,
-				version = app.version,
-				max_width = app.max_width,
-				mode = mode,
-				global_flags = global_infos,
-				global_defaults = app._global_flags_ptr,
-				global_type = app._global_flags_type,
-			},
-		)
+		if code, ok := dispatch_default(app, program, nil, mode); ok do return code
+		write_help(stdout, Empty, program, app_help)
 		return 1
 	}
 
@@ -421,21 +446,7 @@ run :: proc(app: ^App, program_args: []string) -> int {
 	first := remaining_args[0] if len(remaining_args) > 0 else ""
 	is_flag := len(first) > 0 && first[0] == '-'
 	if is_flag && is_help_flag(remaining_args, app.parsing_style) {
-		write_help(
-			stdout, Empty, program,
-			Help_Config{
-				parsing_style = app.parsing_style,
-				commands = app.commands[:],
-				theme = app.theme,
-				description = app.description,
-				version = app.version,
-				max_width = app.max_width,
-				mode = mode,
-				global_flags = global_infos,
-				global_defaults = app._global_flags_ptr,
-				global_type = app._global_flags_type,
-			},
-		)
+		write_help(stdout, Empty, program, app_help)
 		return 0
 	}
 
@@ -445,23 +456,26 @@ run :: proc(app: ^App, program_args: []string) -> int {
 		return 0
 	}
 
+	// Check for --completions.
+	if is_flag {
+		if shell, ok := check_completions_flag(remaining_args, app.parsing_style); ok {
+			write_completions(stdout, app, shell)
+			return 0
+		}
+	}
+
+	// First arg is a flag but not --help/--version/--completions: dispatch to default command,
+	// or show help if no default is configured.
+	if is_flag {
+		if code, ok := dispatch_default(app, program, remaining_args, mode); ok do return code
+		write_help(stdout, Empty, program, app_help)
+		return 1
+	}
+
 	// Handle no remaining args after global extraction.
 	if len(remaining_args) == 0 {
-		write_help(
-			stdout, Empty, program,
-			Help_Config{
-				parsing_style = app.parsing_style,
-				commands = app.commands[:],
-				theme = app.theme,
-				description = app.description,
-				version = app.version,
-				max_width = app.max_width,
-				mode = mode,
-				global_flags = global_infos,
-				global_defaults = app._global_flags_ptr,
-				global_type = app._global_flags_type,
-			},
-		)
+		if code, ok := dispatch_default(app, program, nil, mode); ok do return code
+		write_help(stdout, Empty, program, app_help)
 		return 1
 	}
 
@@ -514,6 +528,15 @@ parse_or_exit :: proc(
 
 	resolved_mode := resolve_mode(mode)
 	all_flags := extract_flags(T)
+
+	// Check for --completions before help_on_empty (user may run `myapp --completions bash` with help_on_empty).
+	if len(args) > 0 {
+		if shell, ok := check_completions_flag(args, parsing_style); ok {
+			stdout := os.stream_from_handle(os.stdout)
+			write_flag_completions(stdout, program, T, shell, parsing_style)
+			os.exit(0)
+		}
+	}
 
 	// Show help when invoked with no arguments.
 	if help_on_empty && len(args) == 0 {
@@ -1302,6 +1325,38 @@ is_version_flag :: proc(args: []string, parsing_style: flags.Parsing_Style) -> b
 		}
 	}
 	return false
+}
+
+// parse_shell_name converts a shell name string to a Shell enum value.
+@(private = "file")
+parse_shell_name :: proc(name: string) -> (Shell, bool) {
+	switch name {
+	case "bash": return .Bash, true
+	case "zsh":  return .Zsh, true
+	case "fish": return .Fish, true
+	}
+	return {}, false
+}
+
+// check_completions_flag scans args for --completions <shell> (Unix) or -completions <shell> (Odin).
+// Returns the shell and true if found.
+@(private = "file")
+check_completions_flag :: proc(args: []string, parsing_style: flags.Parsing_Style) -> (shell: Shell, ok: bool) {
+	flag: string
+	switch parsing_style {
+	case .Unix: flag = "--completions"
+	case .Odin: flag = "-completions"
+	}
+	for arg, i in args {
+		if arg == flag && i + 1 < len(args) {
+			if s, s_ok := parse_shell_name(args[i + 1]); s_ok do return s, true
+		}
+		// Also handle --completions=bash form.
+		if strings.has_prefix(arg, flag) && len(arg) > len(flag) && arg[len(flag)] == '=' {
+			if s, s_ok := parse_shell_name(arg[len(flag) + 1:]); s_ok do return s, true
+		}
+	}
+	return {}, false
 }
 
 // find_command_suggestion finds the closest matching command name.
