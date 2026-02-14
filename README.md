@@ -1,66 +1,128 @@
 # odin-cli
 
-A terminal styling library for Odin that prioritizes ease of use and zero memory allocation in production code.
+A terminal toolkit for Odin — styled text, tables, logging, spinners, progress bars, trees, and CLI framework, all with zero-allocation design and seamless `fmt` integration.
 
-## Design Goals
+Inspired by [Rich](https://github.com/Textualize/rich) for Python.
 
-1. **Zero allocation by default** - Styled text works with `fmt.println()` without heap allocation
-2. **Seamless integration** - Works transparently with Odin's standard `fmt` and `log` packages
-3. **Functional composition** - Chain style functions naturally: `bold(italic(red("text")))`
+## Packages
 
-## Why cli_style?
+| Package | Description |
+|---------|-------------|
+| [`style`](style/) | Zero-allocation ANSI text styling with `fmt` integration |
+| [`table`](table/) | Formatted tables with borders, alignment, and styled cells |
+| [`logger`](logger/) | Structured logging with multiple sinks and `context.logger` drop-in |
+| [`spinner`](spinner/) | Animated terminal spinners with threaded animation |
+| [`progress`](progress/) | Progress bars with customizable styles and elapsed time |
+| [`tree`](tree/) | Hierarchical tree rendering with Unicode branch characters |
+| [`cli`](cli/) | CLI framework with rich help output, validation, and shell completions |
+| [`term`](term/) | Terminal capability detection (width, color, render mode) |
 
-Other Odin terminal color libraries take different approaches that require more memory management:
+Each package can be imported independently — use only what you need.
 
-**[odin-color](https://github.com/hrszpuk/odin-color)** allocates a new string for every styled text:
+## Installation
+
+### As a git subtree (recommended)
+
+Copies the source directly into your project — no special steps for collaborators who clone your repo:
+
+```bash
+git subtree add --prefix deps/odin-cli https://github.com/davised/odin-cli.git main --squash
+```
+
+Then import the packages you need:
 
 ```odin
-// odin-color approach - allocates via fmt.aprintf
-color :: proc(color, input: string, allocator := context.allocator) -> string {
-    return fmt.aprintf("%s%s%s", color, input, RESET, allocator = allocator)
-}
+import "deps/odin-cli/style"
+import "deps/odin-cli/table"
+import "deps/odin-cli/logger"
+```
 
-// Usage requires managing the allocated string
-colored := red("Hello")
+To update:
+
+```bash
+git subtree pull --prefix deps/odin-cli https://github.com/davised/odin-cli.git main --squash
+```
+
+### As a git submodule
+
+Keeps a lightweight reference instead of copying the source:
+
+```bash
+git submodule add https://github.com/davised/odin-cli.git deps/odin-cli
+```
+
+Collaborators cloning your project need an extra step:
+
+```bash
+git clone --recurse-submodules https://github.com/yourname/yourproject.git
+# or, if already cloned:
+git submodule update --init
+```
+
+To update:
+
+```bash
+git submodule update --remote deps/odin-cli
+```
+
+### Into the Odin shared collection
+
+For system-wide availability across all your projects:
+
+```bash
+cd /path/to/Odin/shared
+git clone https://github.com/davised/odin-cli.git odin-cli
+```
+
+Then import with:
+
+```odin
+import "shared:odin-cli/style"
+import "shared:odin-cli/table"
+```
+
+## Design Philosophy
+
+### Zero allocation by default
+
+Most terminal styling libraries allocate a new string for every styled text — you get a string back, you `defer delete` it, and if you forget, you leak. odin-cli takes a different approach: `Styled_Text` is a stack-allocated struct that holds a *reference* to your string (not a copy). Nothing is allocated; nothing needs to be freed.
+
+```odin
+// Other libraries: allocate, print, free
+colored := other_lib.red("Hello")
 defer delete(colored)
 fmt.println(colored)
+
+// odin-cli: just print
+fmt.println(style.red("Hello"))
 ```
 
-**[TermCL](https://github.com/RaphGL/TermCL)** uses dynamic cell buffers and string builders - designed for full-screen TUI apps, not inline text styling.
+This extends to chaining — `style.bold(style.italic(style.red("Hello")))` is still zero allocation. Each call returns a small struct on the stack.
 
-**cli_style** takes a different approach:
+### Custom fmt formatters
 
-```odin
-// cli_style - zero allocation, works directly with fmt
-fmt.println(red("Hello"))  // No allocation, no cleanup needed
+At program init, each package registers a custom formatter with Odin's `fmt` package. This means styled text, tables, and trees work transparently anywhere `fmt` does — `fmt.println`, `fmt.printfln`, `log.info`, string interpolation via `fmt.tprintf`, all of it.
 
-// Chaining is also zero-allocation
-fmt.println(bold(italic(red("Hello"))))  // Still no allocation
-```
+### The io.Writer pattern
 
-The key difference is that `Styled_Text` is a stack-allocated struct holding a reference to your string (not a copy), and a custom formatter writes ANSI codes directly to the output stream.
+Every package that produces output writes directly to an `io.Writer`. No intermediate string buffers, no allocations for the output itself. Tables write row-by-row, trees write line-by-line, loggers write field-by-field — all straight to the destination.
 
-| Library | Allocation per styled text | fmt.println() integration | Chaining cost |
-|---------|---------------------------|---------------------------|---------------|
-| odin-color | Yes (`aprintf`) | No - returns string | N allocations |
-| TermCL | Dynamic buffers | No - TUI focused | N/A |
-| **cli_style** | **No** | **Yes** - custom formatter | **Zero** |
+### Render mode awareness
+
+All output packages auto-detect terminal capabilities per output handle. They respect the [`NO_COLOR`](https://no-color.org/) standard, detect TTY vs pipe, and degrade gracefully: full color in terminals, plain text through pipes.
 
 ## Quick Start
 
 ```odin
-import "odin-cli/style"
+import "deps/odin-cli/style"
 
 main :: proc() {
     // Basic colors
     fmt.println(style.red("Error occurred"))
     fmt.println(style.green("Success!"))
 
-    // Chained styles
+    // Chained styles — still zero allocation
     fmt.println(style.bold(style.italic(style.blue("Important"))))
-
-    // Background colors
-    fmt.println(style.yellow("Highlighted", bg = true))
 
     // Semantic helpers
     fmt.println(style.warn("Warning message"))
@@ -72,192 +134,203 @@ main :: proc() {
 }
 ```
 
-## How It Works
+### Style strings for prototyping
 
-The library registers a custom formatter with Odin's `fmt` package at initialization. When `fmt.println()` encounters a `Styled_Text`, it writes ANSI escape codes directly to the output - no intermediate string allocation needed.
-
-`Styled_Text` is a lightweight struct that lives on the stack:
+The `st()` function parses style strings at runtime (uses temp allocator). Once you've settled on styles, convert to zero-allocation procedure calls for production:
 
 ```odin
-Styled_Text :: struct {
-    text:  string,  // Reference to your string (not a copy)
-    style: Style,   // Text styles + foreground/background colors
-}
-```
+// Prototyping — parses at runtime
+fmt.println(style.st("Hello", "bold italic fg:rgb(255,128,0)"))
 
-## Recommended Workflow
-
-### 1. Experiment with `st()`
-
-The `st()` function parses style strings, making it easy to try different combinations:
-
-```odin
-// Try different styles interactively
-fmt.println(st("Hello", "bold red"))
-fmt.println(st("World", "italic underline fg:rgb(255,128,0)"))
-fmt.println(st("Test", "bold bg:#336699 fg:white"))
-```
-
-Supported style string formats:
-- **Text styles**: `bold`, `italic`, `underline`, `strike`, `faint`, `blink_slow`, `blink_rapid`, `invert`, `hide`
-- **Named colors**: `red`, `blue`, `green`, `yellow`, `magenta`, `cyan`, `black`, `white` (and `bright*` variants)
-- **Hex colors**: `#FF5500` or `FF5500`
-- **RGB**: `rgb(255, 128, 0)`
-- **HSL**: `hsl(120, 1.0, 0.5)`
-- **8-bit palette**: `color(172)`
-- **Foreground/background prefix**: `fg:red`, `bg:blue`, `bg:#00FF00`
-
-Combine multiple styles with spaces: `"bold italic fg:rgb(255,0,0) bg:black"`
-
-### 2. Convert to Hard-Coded Procedures
-
-Once you've found styles you like, convert them to dedicated procedures for production use. This eliminates the parsing overhead and memory allocation from `st()`.
-
-**Before (uses temp allocator for parsing):**
-```odin
-fmt.println(st("Winner!", "bold italic fg:brightgreen blink_rapid"))
-```
-
-**After (zero allocation):**
-```odin
-winner :: proc(str: union{string, Styled_Text}) -> Styled_Text {
-    value := get_or_create_styled_text(str)
-    value.style = Style{
-        foreground_color = ANSI_FG.Bright_Green,
-        text_styles = {.Bold, .Italic, .Blink_Rapid},
+// Production — write a custom procedure, zero allocation
+highlight :: proc(str: union{string, style.Styled_Text}) -> style.Styled_Text {
+    value := style.get_or_create_styled_text(str)
+    value.style = style.Style{
+        foreground_color = style.RGB{255, 128, 0},
+        text_styles      = {.Bold, .Italic},
     }
     return value
 }
 
-// Usage
-fmt.println(winner("You won!"))
+fmt.println(highlight("Hello"))
 ```
 
-The built-in `warn`, `error`, and `success` procedures are examples of this pattern.
+Supported formats: named colors (`red`, `bright_green`), hex (`#FF5500`), RGB (`rgb(255,128,0)`), HSL (`hsl(120,1.0,0.5)`), 8-bit palette (`color(172)`), with `fg:`/`bg:` prefixes for foreground/background.
 
-### Why This Matters
+## Packages
 
-| Approach | Allocates | Parsing | Use Case |
-|----------|-----------|---------|----------|
-| `st("text", "bold red")` | Yes (temp) | Runtime | Development, experimentation |
-| `bold(red("text"))` | No | None | Production |
-| `my_custom_style("text")` | No | None | Production (custom styles) |
+### table
 
-## Creating Custom Style Procedures
-
-Use the existing semantic helpers as templates:
+Formatted tables with Unicode borders, column alignment, auto-sizing, and styled cells.
 
 ```odin
-// Simple: single color + style
-my_highlight :: proc(str: union{string, Styled_Text}) -> Styled_Text {
-    value := get_or_create_styled_text(str)
-    value.style = Style{
-        foreground_color = ANSI_FG.Yellow,
-        background_color = ANSI_BG.Blue,
-        text_styles = {.Bold},
-    }
-    return value
+tbl := table.make_table(border = table.BORDER_ROUNDED)
+defer table.destroy_table(&tbl)
+
+table.add_column(&tbl, style.bold("Name"))
+table.add_column(&tbl, style.bold("Status"), alignment = .CENTER)
+
+table.add_row(&tbl, "Alice", style.green("Active"))
+table.add_row(&tbl, "Bob",   style.yellow("Away"))
+
+fmt.println(tbl)
+```
+
+Predefined borders: `BORDER_ROUNDED`, `BORDER_LIGHT`, `BORDER_HEAVY`, `BORDER_DOUBLE`, `BORDER_ASCII`, `BORDER_NONE`. Supports fixed-width mode, text wrapping, titles, row separators, and per-cell alignment.
+
+See [`examples/table_demo`](examples/table_demo) for more.
+
+### logger
+
+Structured logging with styled output, multiple sinks, and a dual API — use it as a `context.logger` drop-in or call the direct structured logging API for additional levels like Trace, Hint, and Success.
+
+```odin
+// Drop-in replacement for context.logger
+lgr := logger.make_logger(lowest_level = .Debug)
+context.logger = logger.to_runtime_logger(&lgr)
+
+log.info("Server started")
+log.warn("Cache miss rate high")
+
+// Or use the direct API for structured key-value logging
+logger.log_info(&lgr, "request handled", "method", "GET", "status", "200")
+
+// Sub-loggers with pre-bound fields
+db := logger.with_fields(lgr, "component", "database")
+logger.log_warn(&db, "slow query", "duration", "850ms")
+```
+
+Features: per-sink level filtering, auto-color detection, timestamps, caller location, CLI verbosity adjustment (`set_level` for `-v`/`-q` flags).
+
+See [`examples/logger_demo`](examples/logger_demo) for more.
+
+### spinner
+
+Animated terminal spinners with threaded animation and graceful degradation.
+
+```odin
+s := spinner.make_spinner(message = "Loading...")
+spinner.start(&s)
+
+// Do work...
+
+spinner.stop(&s, message = "Done!")
+```
+
+Predefined animations: `spinner_dots()` (braille), `spinner_line()`, `spinner_circle()`. Thread-safe message updates via `set_message`. Falls back to static text when piped.
+
+### progress
+
+Progress bars with customizable fill styles, percentage, count, and elapsed time.
+
+```odin
+bar := progress.make_progress(total = 100, message = "Processing")
+progress.start(&bar)
+
+for i in 0..<100 {
+    // Do work...
+    progress.increment(&bar)
 }
 
-// RGB colors
-my_brand_color :: proc(str: union{string, Styled_Text}) -> Styled_Text {
-    value := get_or_create_styled_text(str)
-    value.style = Style{
-        foreground_color = RGB{66, 135, 245},  // Your brand blue
-        text_styles = {.Bold},
-    }
-    return value
+progress.complete(&bar, message = "Complete!")
+```
+
+Predefined styles: `bar_block()` (`████░░`), `bar_ascii()` (`===>`), `bar_thin()` (`━━━───`).
+
+### tree
+
+Hierarchical tree rendering with Unicode branch characters and styled nodes.
+
+```odin
+t := tree.Tree{
+    root = "Project",
+    children = {
+        "README.md",
+        style.bold("src/"),
+        &tree.Tree{
+            root = style.blue("lib/"),
+            children = {"utils.odin", "core.odin"},
+        },
+    },
 }
 
-// 8-bit palette color
-my_orange :: proc(str: union{string, Styled_Text}) -> Styled_Text {
-    value := get_or_create_styled_text(str)
-    value.style = Style{
-        foreground_color = EightBit(208),  // Orange from 256-color palette
-    }
-    return value
+fmt.println(t)
+```
+
+Predefined enumerators: `DEFAULT_ENUMERATOR` (`├──`/`└──`), `ROUNDED_ENUMERATOR` (`├──`/`╰──`), `ASCII_ENUMERATOR` (`|--`/`\--`). Supports recursive nesting, per-subtree enumerator override, and forest mode (nil root).
+
+### cli
+
+Rich CLI framework wrapping `core:flags` with beautiful help output, input validation, multi-command apps, and shell completions.
+
+**Simple single-command:**
+
+```odin
+Options :: struct {
+    input:   string `args:"pos=0,required,file_exists" usage:"Input file"`,
+    verbose: bool   `args:"short=v" usage:"Verbose output"`,
+    count:   int    `args:"min=1,max=100" usage:"Iterations"`,
+}
+
+main :: proc() {
+    options: Options
+    cli.parse_or_exit(&options, os.args,
+        description = "My tool.",
+        version = "1.0.0",
+    )
 }
 ```
 
-## Available Types
-
-### Colors
+**Multi-command app:**
 
 ```odin
-// Standard ANSI (16 colors) - most compatible
-ANSI_FG :: enum { Black, Red, Green, Yellow, Blue, Magenta, Cyan, White,
-                  Bright_Black, Bright_Red, Bright_Green, Bright_Yellow,
-                  Bright_Blue, Bright_Magenta, Bright_Cyan, Bright_White }
+app := cli.make_app("mytool",
+    description = "My multi-command tool.",
+    version = "1.0.0",
+)
 
-// 8-bit palette (256 colors)
-EightBit :: distinct u8
+cli.add_command(&app, Build_Flags, "build",
+    description = "Build the project",
+    action = build_action,
+    aliases = {"b"},
+)
 
-// True color (16 million colors)
-RGB :: struct { r, g, b: EightBit }
+cli.run(&app, os.args)
 ```
 
-### Text Styles
+Validation tags: `required`, `min`/`max`, `file_exists`/`dir_exists`, `env=VAR`, `short=X`, `count` (for `-vvv`), flag groups (`xor`, `one_of`, `together`). Auto-generates `--completions` for Bash/Zsh/Fish. Typo suggestions via Levenshtein distance.
+
+See [`examples/cli_demo`](examples/cli_demo), [`examples/hqsub_demo`](examples/hqsub_demo), and the [CLI tutorial](cli/TUTORIAL.md) for more.
+
+### term
+
+Terminal capability detection used by all output packages.
 
 ```odin
-Text_Style :: enum {
-    Bold, Faint, Italic, Underline,
-    Blink_Slow, Blink_Rapid, Invert, Hide, Strike
+// Detect terminal width
+if width, ok := term.terminal_width(); ok {
+    fmt.printfln("Terminal is %d columns wide", width)
 }
 
-// Combine multiple styles with a bit_set
-Text_Style_Set :: bit_set[Text_Style]
+// Detect color/style support for an output handle
+mode := term.detect_render_mode(os.stderr)
+// Returns: .Full (color + styles), .No_Color (styles only), or .Plain (nothing)
 ```
 
-## API Reference
+Respects `NO_COLOR`, `FORCE_COLOR`, and `CLICOLOR_FORCE` environment variables.
 
-All procedures include docstrings in the source. Key functions:
+## Acknowledgments
 
-- **Color functions**: `red()`, `green()`, `blue()`, `yellow()`, `magenta()`, `cyan()`, `black()`, `white()` and `bright_*` variants
-- **Style functions**: `bold()`, `italic()`, `underline()`, `strike()`, `faint()`, `blink_slow()`, `blink_rapid()`, `invert()`, `hide()`
-- **Semantic helpers**: `warn()`, `error()`, `success()`
-- **Parsing**: `st(text, style_string)` - parse a style string (uses temp allocator)
-- **Conversion**: `to_str(styled_text)` - convert to allocated string with ANSI codes (caller must `delete`)
+This project is inspired by [Rich](https://github.com/Textualize/rich) by [Will McGugan](https://github.com/willmcgugan) — a fantastic Python library for terminal output. Rich demonstrated that CLI tools don't have to look boring, and that a well-designed terminal toolkit can make a real difference in developer experience.
 
-## Debugging: Inspecting Styled_Text
+## AI Transparency
 
-By default, printing a `Styled_Text` applies the ANSI formatting. To inspect the underlying struct instead, use the `%w` verb:
+The majority of this project was written with [Claude Code](https://claude.ai/claude-code) (Opus 4.6). The development workflow is human-directed, AI-assisted: architectural decisions, API design, and code review are done by a human; implementation, testing, and iteration are collaborative.
 
-```odin
-styled := bold(red("Hello"))
+## Contributing
 
-// Prints with ANSI formatting (colored output)
-fmt.println(styled)
-fmt.printfln("%v", styled)
-fmt.printfln("%s", styled)
-
-// Prints the struct itself (for debugging)
-fmt.printfln("%w", styled)
-// Output: Styled_Text{text = "Hello", style = Style{text_styles = {Bold}, foreground_color = Red, background_color = nil}}
-```
-
-This is helpful when you want to verify what styles are being applied without the terminal interpreting the ANSI codes.
-
-## When You Need an Allocated String
-
-If you need the ANSI-formatted string itself (not just printing), use `to_str()`:
-
-```odin
-formatted := to_str(bold(red("Error")))
-defer delete(formatted)
-// Use formatted string...
-```
-
-## Code Style
-
-This library follows the conventions of Odin's core library:
-
-- Procedure and type documentation uses `/* */` block comments
-- Parameter and return value documentation follows core library format
-- Snake_case for types, snake_case for procedures and variables
-- Explicit error handling with multiple return values or `#optional_ok`
-
-See the source files for examples - all public procedures include docstrings.
+Issues and PRs are welcome. The codebase follows Odin core library conventions — `snake_case` for procedures and variables, `Pascal_Case` for types, `/* */` block comments for documentation. The [`examples/`](examples/) directory is a good place to start exploring.
 
 ## License
 
-[Add your license here]
+zlib — see [LICENSE](LICENSE) for details.
