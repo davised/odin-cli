@@ -446,3 +446,195 @@ test_no_color_mode :: proc(t: ^testing.T) {
 	testing.expect(t, !strings.contains(result, "\x1b[31m"), "No_Color should not have red color")
 	testing.expect(t, strings.contains(result, "styled"), "No_Color should preserve text")
 }
+
+// --- Builder tests ---
+
+@(test)
+test_builder_flat :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	b := tree.make_builder("root")
+	defer tree.destroy_builder(&b)
+
+	tree.add(&b, "a")
+	tree.add(&b, "b")
+	tree.add(&b, "c")
+	tr := tree.build(&b)
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), tr)
+	testing.expect(t, ok, "to_writer failed")
+
+	expected := `root
+├── a
+├── b
+└── c
+`
+	testing.expect_value(t, strings.to_string(sb), expected)
+}
+
+@(test)
+test_builder_nested :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	b := tree.make_builder("root")
+	defer tree.destroy_builder(&b)
+
+	sub := tree.add_tree(&b, "sub")
+	tree.add(sub, "child1")
+	tree.add(sub, "child2")
+	tree.add(&b, "leaf")
+
+	tr := tree.build(&b)
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), tr)
+	testing.expect(t, ok, "to_writer failed")
+
+	expected := `root
+├── sub
+│   ├── child1
+│   └── child2
+└── leaf
+`
+	testing.expect_value(t, strings.to_string(sb), expected)
+}
+
+@(test)
+test_builder_empty :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	b := tree.make_builder("root")
+	defer tree.destroy_builder(&b)
+
+	tr := tree.build(&b)
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), tr)
+	testing.expect(t, ok, "to_writer failed")
+
+	testing.expect_value(t, strings.to_string(sb), "root\n")
+}
+
+@(test)
+test_builder_subtrees_only :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	b := tree.make_builder("root")
+	defer tree.destroy_builder(&b)
+
+	s1 := tree.add_tree(&b, "s1")
+	tree.add(s1, "a")
+	s2 := tree.add_tree(&b, "s2")
+	tree.add(s2, "b")
+
+	tr := tree.build(&b)
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), tr)
+	testing.expect(t, ok, "to_writer failed")
+
+	expected := `root
+├── s1
+│   └── a
+└── s2
+    └── b
+`
+	testing.expect_value(t, strings.to_string(sb), expected)
+}
+
+@(test)
+test_builder_deep_nesting :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	b := tree.make_builder("L0")
+	defer tree.destroy_builder(&b)
+
+	l1 := tree.add_tree(&b, "L1")
+	l2 := tree.add_tree(l1, "L2")
+	tree.add(l2, "leaf")
+	tree.add(&b, "sibling")
+
+	tr := tree.build(&b)
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), tr)
+	testing.expect(t, ok, "to_writer failed")
+
+	expected :=
+		"L0\n" +
+		"├── L1\n" +
+		"│   └── L2\n" +
+		"│       └── leaf\n" +
+		"└── sibling\n"
+	testing.expect_value(t, strings.to_string(sb), expected)
+}
+
+@(test)
+test_builder_matches_struct_literal :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Build via struct literals
+	gc := [?]tree.Tree_Item{"main.odin", "utils.odin"}
+	src := tree.Tree {
+		root     = "src",
+		children = gc[:],
+	}
+	lit_children := [?]tree.Tree_Item{&src, "README.md"}
+	lit := tree.Tree {
+		root     = "my-project",
+		children = lit_children[:],
+	}
+
+	sb_lit := strings.builder_make()
+	defer strings.builder_destroy(&sb_lit)
+	ok_lit := tree.to_writer(strings.to_writer(&sb_lit), lit)
+	testing.expect(t, ok_lit, "struct literal to_writer failed")
+
+	// Build via builder
+	b := tree.make_builder("my-project")
+	defer tree.destroy_builder(&b)
+
+	src_b := tree.add_tree(&b, "src")
+	tree.add(src_b, "main.odin")
+	tree.add(src_b, "utils.odin")
+	tree.add(&b, "README.md")
+
+	built := tree.build(&b)
+
+	sb_built := strings.builder_make()
+	defer strings.builder_destroy(&sb_built)
+	ok_built := tree.to_writer(strings.to_writer(&sb_built), built)
+	testing.expect(t, ok_built, "builder to_writer failed")
+
+	testing.expect_value(t, strings.to_string(sb_built), strings.to_string(sb_lit))
+}
+
+@(test)
+test_builder_styled_items :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	b := tree.make_builder(style.bold("root"))
+	defer tree.destroy_builder(&b)
+
+	tree.add(&b, style.red("colored"))
+	tree.add(&b, "plain")
+
+	tr := tree.build(&b)
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), tr)
+	testing.expect(t, ok, "to_writer failed")
+
+	output := strings.to_string(sb)
+	testing.expect(t, strings.contains(output, "\x1b[1m"), "expected bold ANSI code")
+	testing.expect(t, strings.contains(output, "root"), "expected root text")
+	testing.expect(t, strings.contains(output, "colored"), "expected colored text")
+	testing.expect(t, strings.contains(output, "plain"), "expected plain text")
+}
