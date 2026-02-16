@@ -627,3 +627,119 @@ test_preprocess_multi_short_equals :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(result.args), 1)
 	testing.expect_value(t, result.args[0], "--processors=4")
 }
+
+// --- preprocess_multi_flags tests ---
+
+@(test)
+test_extract_flags_multi :: proc(t: ^testing.T) {
+	Opts :: struct {
+		nodes: string `args:"multi" usage:"Node list"`,
+	}
+	infos := extract_flags(Opts)
+	testing.expect_value(t, infos[0].is_multi, true)
+}
+
+@(test)
+test_preprocess_multi_basic :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "nodes", display_name = "nodes", is_multi = true},
+	}
+	result := preprocess_multi_flags({"--nodes", "foo", "--nodes", "bar"}, infos, .Unix)
+	testing.expect_value(t, len(result), 1)
+	testing.expect_value(t, result[0], "--nodes=foo,bar")
+}
+
+@(test)
+test_preprocess_multi_equals :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "nodes", display_name = "nodes", is_multi = true},
+	}
+	result := preprocess_multi_flags({"--nodes=foo", "--nodes=bar"}, infos, .Unix)
+	testing.expect_value(t, len(result), 1)
+	testing.expect_value(t, result[0], "--nodes=foo,bar")
+}
+
+@(test)
+test_preprocess_multi_comma_merge :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "nodes", display_name = "nodes", is_multi = true},
+	}
+	result := preprocess_multi_flags({"--nodes", "foo,bar", "--nodes", "baz"}, infos, .Unix)
+	testing.expect_value(t, len(result), 1)
+	testing.expect_value(t, result[0], "--nodes=foo,bar,baz")
+}
+
+@(test)
+test_preprocess_multi_single_unchanged :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "nodes", display_name = "nodes", is_multi = true},
+	}
+	result := preprocess_multi_flags({"--nodes", "foo"}, infos, .Unix)
+	testing.expect_value(t, len(result), 2)
+	testing.expect_value(t, result[0], "--nodes")
+	testing.expect_value(t, result[1], "foo")
+}
+
+@(test)
+test_preprocess_multi_non_multi_pass_through :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "output", display_name = "output"},
+	}
+	result := preprocess_multi_flags({"--output", "foo", "--output", "bar"}, infos, .Unix)
+	testing.expect_value(t, len(result), 4)
+	testing.expect_value(t, result[0], "--output")
+	testing.expect_value(t, result[1], "foo")
+	testing.expect_value(t, result[2], "--output")
+	testing.expect_value(t, result[3], "bar")
+}
+
+@(test)
+test_preprocess_multi_mixed :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "nodes", display_name = "nodes", is_multi = true},
+		{field_name = "output", display_name = "output"},
+	}
+	result := preprocess_multi_flags({"--nodes", "foo", "--output", "out.txt", "--nodes", "bar"}, infos, .Unix)
+	testing.expect_value(t, len(result), 3)
+	testing.expect_value(t, result[0], "--nodes=foo,bar")
+	testing.expect_value(t, result[1], "--output")
+	testing.expect_value(t, result[2], "out.txt")
+}
+
+@(test)
+test_preprocess_multi_mixed_eq_and_space :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "nodes", display_name = "nodes", is_multi = true},
+	}
+	result := preprocess_multi_flags({"--nodes=foo", "--nodes", "bar"}, infos, .Unix)
+	testing.expect_value(t, len(result), 1)
+	testing.expect_value(t, result[0], "--nodes=foo,bar")
+}
+
+@(test)
+test_preprocess_multi_two_flags_one_single :: proc(t: ^testing.T) {
+	// Regression: when one multi-flag has >1 occurrence (triggers merging)
+	// and another multi-flag has exactly 1 occurrence, the single-occurrence
+	// flag must not be silently dropped.
+	infos := []Flag_Info{
+		{field_name = "nodes", display_name = "nodes", is_multi = true},
+		{field_name = "opts", display_name = "opts", is_multi = true},
+	}
+	result := preprocess_multi_flags({"--nodes", "foo", "--opts", "bar", "--nodes", "baz"}, infos, .Unix)
+	testing.expect_value(t, len(result), 3)
+	testing.expect_value(t, result[0], "--nodes=foo,baz")
+	testing.expect_value(t, result[1], "--opts")
+	testing.expect_value(t, result[2], "bar")
+}
+
+@(test)
+test_preprocess_multi_via_short_flags :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "nodes", display_name = "nodes", short_name = "n", is_multi = true},
+	}
+	// Simulate pipeline: short flags first, then multi merge.
+	short_result := preprocess_short_flags({"-n", "foo", "-n", "bar"}, infos)
+	result := preprocess_multi_flags(short_result.args, infos, .Unix)
+	testing.expect_value(t, len(result), 1)
+	testing.expect_value(t, result[0], "--nodes=foo,bar")
+}

@@ -36,6 +36,7 @@ Flag_Info :: struct {
 	is_hidden:        bool,
 	is_greedy:        bool,        // from args:"greedy" — short-circuits before parse
 	is_count:         bool,        // from args:"count" — int field, accumulates via repeated short flags
+	is_multi:         bool,        // from args:"multi" — string field, merges repeated flag values with comma
 	is_enum:          bool,        // auto-detected from field type
 	group:            Flag_Group,  // constraint group (zero value = no group)
 	min_val:          Maybe(f64),  // from args:"min=N"
@@ -66,6 +67,8 @@ SUBTAG_ENV :: "env"
 SUBTAG_GREEDY :: "greedy"
 @(private = "file")
 SUBTAG_COUNT :: "count"
+@(private = "file")
+SUBTAG_MULTI :: "multi"
 @(private = "file")
 SUBTAG_XOR :: "xor"
 @(private = "file")
@@ -125,6 +128,12 @@ extract_flags :: proc(data_type: typeid) -> []Flag_Info {
 			if _, has_count := get_subtag(args_tag, SUBTAG_COUNT); has_count {
 				info.is_count = true
 			}
+			if _, has_multi := get_subtag(args_tag, SUBTAG_MULTI); has_multi {
+				base := runtime.type_info_base(field.type)
+				_, is_str := base.variant.(runtime.Type_Info_String)
+				assert(is_str, fmt.tprintf("args:\"multi\" on field '%s' requires a string type", field.name))
+				info.is_multi = true
+			}
 			// Group tags (mutually exclusive — a flag can only be in one group).
 			if xor_val, has_xor := get_subtag(args_tag, SUBTAG_XOR); has_xor {
 				info.group = {name = xor_val, mode = .At_Most_One}
@@ -166,6 +175,12 @@ extract_flags :: proc(data_type: typeid) -> []Flag_Info {
 
 		// Boolean detection.
 		info.is_boolean = reflect.is_boolean(field.type)
+
+		// Multi mutual exclusivity checks.
+		if info.is_multi {
+			assert(!info.is_count, fmt.tprintf("Field '%s': args:\"multi\" and args:\"count\" are mutually exclusive", field.name))
+			assert(!info.is_boolean, fmt.tprintf("Field '%s': args:\"multi\" cannot be used on boolean fields", field.name))
+		}
 
 		// Usage text from "usage" tag.
 		if usage, ok := reflect.struct_tag_lookup(field.tag, TAG_USAGE); ok {

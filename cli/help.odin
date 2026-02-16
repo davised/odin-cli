@@ -466,6 +466,10 @@ build_meta :: proc(info: Flag_Info, theme: Theme, defaults_any: any = nil) -> ta
 		})
 	}
 
+	if info.is_multi {
+		append(&segments, style.Styled_Text{text = "[multi]", style = theme.meta_style})
+	}
+
 	// Path constraints.
 	if info.file_exists { append(&segments, style.Styled_Text{text = "[file]", style = theme.meta_style}) }
 	if info.dir_exists  { append(&segments, style.Styled_Text{text = "[directory]", style = theme.meta_style}) }
