@@ -404,7 +404,7 @@ add_option_rows :: proc(
 
 		flag_str: string
 		if len(opt.short_name) > 0 && parsing_style == .Unix {
-			flag_str = fmt.tprintf("-%s, %s", opt.short_name, long_name)
+			flag_str = fmt.tprintf("-%c, %s", opt.short_name[0], long_name)
 		} else if has_any_short {
 			flag_str = fmt.tprintf("    %s", long_name)
 		} else {

@@ -643,7 +643,9 @@ preprocess_short_flags :: proc(args: []string, flag_infos: []Flag_Info) -> Prepr
 	short_map := make(map[byte]Flag_Info, allocator = context.temp_allocator)
 	for fi in flag_infos {
 		if len(fi.short_name) > 0 {
-			short_map[fi.short_name[0]] = fi
+			for ch in transmute([]u8)fi.short_name {
+				short_map[ch] = fi
+			}
 		}
 	}
 
@@ -821,7 +823,9 @@ extract_global_args :: proc(
 	for fi in global_infos {
 		name_map[fi.display_name] = fi
 		if len(fi.short_name) > 0 && parsing_style == .Unix {
-			short_map[fi.short_name[0]] = fi
+			for ch in transmute([]u8)fi.short_name {
+				short_map[ch] = fi
+			}
 		}
 	}
 

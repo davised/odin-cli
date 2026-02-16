@@ -561,3 +561,69 @@ test_format_range_val_fractional :: proc(t: ^testing.T) {
 	testing.expect_value(t, format_range_val(3.14), "3.14")
 	testing.expect_value(t, format_range_val(-2.5), "-2.5")
 }
+
+// --- Multi-short alias tests ---
+
+@(test)
+test_extract_flags_multi_short :: proc(t: ^testing.T) {
+	Opts :: struct {
+		processors: int `args:"short=pP" usage:"Number of processors"`,
+	}
+	infos := extract_flags(Opts)
+	testing.expect_value(t, infos[0].short_name, "pP")
+}
+
+@(test)
+test_preprocess_multi_short_primary :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "processors", display_name = "processors", short_name = "pP"},
+	}
+	result := preprocess_short_flags({"-p", "4"}, infos)
+	testing.expect_value(t, len(result.args), 2)
+	testing.expect_value(t, result.args[0], "--processors")
+	testing.expect_value(t, result.args[1], "4")
+}
+
+@(test)
+test_preprocess_multi_short_alias :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "processors", display_name = "processors", short_name = "pP"},
+	}
+	result := preprocess_short_flags({"-P", "4"}, infos)
+	testing.expect_value(t, len(result.args), 2)
+	testing.expect_value(t, result.args[0], "--processors")
+	testing.expect_value(t, result.args[1], "4")
+}
+
+@(test)
+test_preprocess_multi_short_combined :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "processors", display_name = "processors", short_name = "pP", is_boolean = true},
+		{field_name = "verbose", display_name = "verbose", short_name = "v", is_boolean = true},
+	}
+	result := preprocess_short_flags({"-Pv"}, infos)
+	testing.expect_value(t, len(result.args), 2)
+	testing.expect_value(t, result.args[0], "--processors")
+	testing.expect_value(t, result.args[1], "--verbose")
+}
+
+@(test)
+test_preprocess_multi_short_value :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "processors", display_name = "processors", short_name = "pP"},
+	}
+	result := preprocess_short_flags({"-P", "file"}, infos)
+	testing.expect_value(t, len(result.args), 2)
+	testing.expect_value(t, result.args[0], "--processors")
+	testing.expect_value(t, result.args[1], "file")
+}
+
+@(test)
+test_preprocess_multi_short_equals :: proc(t: ^testing.T) {
+	infos := []Flag_Info{
+		{field_name = "processors", display_name = "processors", short_name = "pP"},
+	}
+	result := preprocess_short_flags({"-P=4"}, infos)
+	testing.expect_value(t, len(result.args), 1)
+	testing.expect_value(t, result.args[0], "--processors=4")
+}

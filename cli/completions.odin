@@ -186,8 +186,14 @@ write_bash_enum_cases :: proc(w: io.Writer, infos: []Flag_Info, parsing_style: f
 		}
 		long := fmt.tprintf("%s%s", prefix, fi.display_name)
 		if len(fi.short_name) > 0 && parsing_style == .Unix {
-			writeln(w, fmt.tprintf("%s    %s|-%s) COMPREPLY=($(compgen -W \"%s\" -- \"$cur\")); return ;;",
-				indent, long, fi.short_name, format_enum_values(fi.enum_names)), n)
+			pattern := strings.builder_make(context.temp_allocator)
+			strings.write_string(&pattern, long)
+			for ch in transmute([]u8)fi.short_name {
+				strings.write_string(&pattern, "|-")
+				strings.write_byte(&pattern, ch)
+			}
+			writeln(w, fmt.tprintf("%s    %s) COMPREPLY=($(compgen -W \"%s\" -- \"$cur\")); return ;;",
+				indent, strings.to_string(pattern), format_enum_values(fi.enum_names)), n)
 		} else {
 			writeln(w, fmt.tprintf("%s    %s) COMPREPLY=($(compgen -W \"%s\" -- \"$cur\")); return ;;",
 				indent, long, format_enum_values(fi.enum_names)), n)
@@ -212,8 +218,14 @@ write_bash_path_cases :: proc(w: io.Writer, infos: []Flag_Info, parsing_style: f
 		long := fmt.tprintf("%s%s", prefix, fi.display_name)
 		comp := fi.dir_exists ? "compgen -d" : "compgen -f"
 		if len(fi.short_name) > 0 && parsing_style == .Unix {
-			writeln(w, fmt.tprintf("%s    %s|-%s) COMPREPLY=($(%s -- \"$cur\")); return ;;",
-				indent, long, fi.short_name, comp), n)
+			pattern := strings.builder_make(context.temp_allocator)
+			strings.write_string(&pattern, long)
+			for ch in transmute([]u8)fi.short_name {
+				strings.write_string(&pattern, "|-")
+				strings.write_byte(&pattern, ch)
+			}
+			writeln(w, fmt.tprintf("%s    %s) COMPREPLY=($(%s -- \"$cur\")); return ;;",
+				indent, strings.to_string(pattern), comp), n)
 		} else {
 			writeln(w, fmt.tprintf("%s    %s) COMPREPLY=($(%s -- \"$cur\")); return ;;",
 				indent, long, comp), n)
@@ -379,13 +391,31 @@ write_zsh_flags :: proc(w: io.Writer, infos: []Flag_Info, parsing_style: flags.P
 		action := zsh_completion_action(fi)
 
 		if len(fi.short_name) > 0 && parsing_style == .Unix {
-			short := fmt.tprintf("-%s", fi.short_name)
+			// Build exclusion group and brace expansion for all short aliases.
+			excl := strings.builder_make(context.temp_allocator)
+			brace := strings.builder_make(context.temp_allocator)
+			for ch, idx in transmute([]u8)fi.short_name {
+				if idx > 0 {
+					strings.write_byte(&excl, ' ')
+					strings.write_byte(&brace, ',')
+				}
+				strings.write_byte(&excl, '-')
+				strings.write_byte(&excl, ch)
+				strings.write_byte(&brace, '-')
+				strings.write_byte(&brace, ch)
+			}
+			strings.write_byte(&excl, ' ')
+			strings.write_string(&excl, long)
+			strings.write_byte(&brace, ',')
+			strings.write_string(&brace, long)
+			excl_str := strings.to_string(excl)
+			brace_str := strings.to_string(brace)
 			if fi.is_boolean {
-				writeln(w, fmt.tprintf("%s'(%s %s)'{{%s,%s}}'[%s]'%s",
-					indent, short, long, short, long, desc, suffix), n)
+				writeln(w, fmt.tprintf("%s'(%s)'{{%s}}'[%s]'%s",
+					indent, excl_str, brace_str, desc, suffix), n)
 			} else {
-				writeln(w, fmt.tprintf("%s'(%s %s)'{{%s,%s}}'[%s]:%s:%s'%s",
-					indent, short, long, short, long, desc, fi.display_name, action, suffix), n)
+				writeln(w, fmt.tprintf("%s'(%s)'{{%s}}'[%s]:%s:%s'%s",
+					indent, excl_str, brace_str, desc, fi.display_name, action, suffix), n)
 			}
 		} else {
 			if fi.is_boolean {
@@ -535,7 +565,7 @@ write_fish_flags :: proc(w: io.Writer, prog: string, infos: []Flag_Info, conditi
 
 		if len(fi.short_name) > 0 && parsing_style == .Unix {
 			io.write_string(w, " -s ", n)
-			io.write_string(w, fi.short_name, n)
+			io.write_byte(w, fi.short_name[0], n)
 		}
 
 		if len(fi.usage) > 0 {
@@ -567,7 +597,7 @@ write_fish_flags :: proc(w: io.Writer, prog: string, infos: []Flag_Info, conditi
 			io.write_string(w, "__fish_contains_opt", n)
 			if len(fi.short_name) > 0 && parsing_style == .Unix {
 				io.write_string(w, " -s ", n)
-				io.write_string(w, fi.short_name, n)
+				io.write_byte(w, fi.short_name[0], n)
 			}
 			io.write_string(w, " ", n)
 			io.write_string(w, fi.display_name, n)
@@ -626,9 +656,11 @@ build_flag_words :: proc(infos: []Flag_Info, parsing_style: flags.Parsing_Style)
 		strings.write_string(&sb, prefix)
 		strings.write_string(&sb, fi.display_name)
 		if len(fi.short_name) > 0 && parsing_style == .Unix {
-			strings.write_byte(&sb, ' ')
-			strings.write_byte(&sb, '-')
-			strings.write_string(&sb, fi.short_name)
+			for ch in transmute([]u8)fi.short_name {
+				strings.write_byte(&sb, ' ')
+				strings.write_byte(&sb, '-')
+				strings.write_byte(&sb, ch)
+			}
 		}
 	}
 	return strings.to_string(sb)

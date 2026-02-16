@@ -26,7 +26,7 @@ Flag_Info :: struct {
 	display_name:     string,      // CLI name (underscores -> hyphens, or name= override)
 	usage:            string,      // from `usage` tag
 	type_description: string,      // "<int>", "<string>", etc.
-	short_name:       string,      // single char, e.g. "v" (from args:"short=v")
+	short_name:       string,      // short alias chars, e.g. "v" or "pP" (from args:"short=v" or args:"short=pP"); first char is primary (shown in help)
 	env_var:          string,      // env var name (from args:"env=VAR")
 	enum_names:       []string,    // enum variant names (from Type_Info_Enum)
 	pos:              int,         // positional index, or -1

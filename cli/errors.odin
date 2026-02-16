@@ -101,8 +101,10 @@ find_suggestion :: proc(unknown: string, all_flags: []Flag_Info) -> (string, boo
 	if len(unknown) == 1 {
 		for f in all_flags {
 			if f.is_hidden do continue
-			if f.short_name == unknown {
-				return f.display_name, true
+			for ch in transmute([]u8)f.short_name {
+				if ch == unknown[0] {
+					return f.display_name, true
+				}
 			}
 		}
 	}
