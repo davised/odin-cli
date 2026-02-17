@@ -639,11 +639,19 @@ Preprocess_Result :: struct {
 // -vvv → counts["verbose"] = 3 for count flags
 @(private)
 preprocess_short_flags :: proc(args: []string, flag_infos: []Flag_Info) -> Preprocess_Result {
-	// Build short_char → Flag_Info lookup.
+	// Build short_char → Flag_Info lookup with collision detection.
 	short_map := make(map[byte]Flag_Info, allocator = context.temp_allocator)
 	for fi in flag_infos {
 		if len(fi.short_name) > 0 {
-			short_map[fi.short_name[0]] = fi
+			for ch in transmute([]u8)fi.short_name {
+				if existing, has := short_map[ch]; has {
+					assert(false, fmt.tprintf(
+						"Short flag '-%c' collision: '%s' and '%s'",
+						rune(ch), existing.field_name, fi.field_name,
+					))
+				}
+				short_map[ch] = fi
+			}
 		}
 	}
 
@@ -729,6 +737,7 @@ preprocess_args :: proc(args: []string, flag_infos: []Flag_Info, parsing_style: 
 	}
 	result = preprocess_short_flags(args, flag_infos)
 	processed = preprocess_env_vars(result.args, flag_infos, parsing_style)
+	processed = preprocess_multi_flags(processed, flag_infos, parsing_style)
 	processed = preprocess_negatable_booleans(processed, flag_infos)
 	return
 }
@@ -821,7 +830,9 @@ extract_global_args :: proc(
 	for fi in global_infos {
 		name_map[fi.display_name] = fi
 		if len(fi.short_name) > 0 && parsing_style == .Unix {
-			short_map[fi.short_name[0]] = fi
+			for ch in transmute([]u8)fi.short_name {
+				short_map[ch] = fi
+			}
 		}
 	}
 
@@ -886,6 +897,109 @@ extract_global_args :: proc(
 	}
 
 	return global[:], remaining[:]
+}
+
+// preprocess_multi_flags merges repeated occurrences of multi-tagged flags by
+// comma-joining their values into a single --flag=v1,v2,... arg.
+@(private)
+preprocess_multi_flags :: proc(args: []string, flag_infos: []Flag_Info, parsing_style: flags.Parsing_Style) -> []string {
+	prefix := flag_prefix_for_style(parsing_style)
+
+	// Build lookup of multi flag display names.
+	multi_names := make(map[string]bool, allocator = context.temp_allocator)
+	for fi in flag_infos {
+		if fi.is_multi {
+			multi_names[fi.display_name] = true
+		}
+	}
+	if len(multi_names) == 0 do return args
+
+	// Pass 1: Collect values per multi flag name, track consumed indices and first occurrence.
+	Flag_Data :: struct {
+		values:    [dynamic]string,
+		first_idx: int,
+	}
+	collected := make(map[string]Flag_Data, allocator = context.temp_allocator)
+	consumed := make(map[int]bool, allocator = context.temp_allocator)
+	first_idx_to_name := make(map[int]string, allocator = context.temp_allocator)
+
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+
+		if strings.has_prefix(arg, prefix) {
+			rest := arg[len(prefix):]
+			name: string
+			value: string
+			has_eq := false
+
+			if eq := strings.index_byte(rest, '='); eq != -1 {
+				name = rest[:eq]
+				value = rest[eq + 1:]
+				has_eq = true
+			} else {
+				name = rest
+			}
+
+			if name in multi_names {
+				if name not_in collected {
+					collected[name] = Flag_Data{
+						values    = make([dynamic]string, 0, 4, context.temp_allocator),
+						first_idx = i,
+					}
+					first_idx_to_name[i] = name
+				}
+				entry := &collected[name]
+
+				if has_eq {
+					append(&entry.values, value)
+					consumed[i] = true
+				} else if i + 1 < len(args) {
+					append(&entry.values, args[i + 1])
+					consumed[i] = true
+					consumed[i + 1] = true
+					i += 1
+				} else {
+					// Bare multi flag at end of args — consume it so it
+					// doesn't appear as a duplicate. flags.parse will
+					// handle the missing-value error on the merged form.
+					consumed[i] = true
+				}
+			}
+		}
+		i += 1
+	}
+
+	// If no multi flag appeared more than once, return args unchanged.
+	any_merged := false
+	for _, data in collected {
+		if len(data.values) > 1 {
+			any_merged = true
+			break
+		}
+	}
+	if !any_merged do return args
+
+	// Pass 2: Rebuild args — emit merged --flag=v1,v2 at first occurrence, skip rest.
+	result := make([dynamic]string, 0, len(args), context.temp_allocator)
+	for idx in 0 ..< len(args) {
+		if idx in consumed {
+			if name, is_first := first_idx_to_name[idx]; is_first {
+				data := collected[name]
+				if len(data.values) > 1 {
+					joined := strings.join(data.values[:], ",", context.temp_allocator)
+					append(&result, fmt.tprintf("%s%s=%s", prefix, name, joined))
+				} else if len(data.values) == 1 {
+					// Single occurrence — re-emit in original form.
+					append(&result, fmt.tprintf("%s%s", prefix, name))
+					append(&result, data.values[0])
+				}
+			}
+		} else {
+			append(&result, args[idx])
+		}
+	}
+	return result[:]
 }
 
 // preprocess_negatable_booleans rewrites --no-flag to --flag=false for boolean flags.
