@@ -4,9 +4,23 @@ import "core:unicode/utf8"
 
 ELLIPSIS :: "…"
 
+// is_printable_ascii returns true if every byte in s is printable ASCII
+// (0x20..0x7E). Control characters and multi-byte UTF-8 return false.
+@(private = "file")
+is_printable_ascii :: proc(s: string) -> bool {
+	for b in transmute([]u8)s {
+		if b < 0x20 || b >= 0x7F do return false
+	}
+	return true
+}
+
 /* display_width returns the monospace terminal cell width of a string.
-	 Handles CJK/fullwidth (2 cols), combining marks (0 cols), emoji, etc. */
+	 Handles CJK/fullwidth (2 cols), combining marks (0 cols), emoji, etc.
+	 Uses a fast path for printable ASCII strings where len == display width. */
 display_width :: proc(s: string) -> int {
+	if is_printable_ascii(s) {
+		return len(s)
+	}
 	_, _, w := utf8.grapheme_count(s)
 	return w
 }
@@ -16,6 +30,9 @@ display_width :: proc(s: string) -> int {
 	 when it fits or when max_width is 0 (unlimited). */
 truncate :: proc(s: string, max_width: int, allocator := context.temp_allocator) -> string {
 	if max_width <= 0 do return s
+
+	// Fast path: if byte length fits and all bytes are printable ASCII, no truncation needed.
+	if len(s) <= max_width && is_printable_ascii(s) do return s
 
 	_, _, total_width := utf8.grapheme_count(s)
 	if total_width <= max_width do return s

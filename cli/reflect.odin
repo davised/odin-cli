@@ -137,12 +137,12 @@ extract_flags :: proc(data_type: typeid) -> []Flag_Info {
 			// Group tags (mutually exclusive — a flag can only be in one group).
 			if xor_val, has_xor := get_subtag(args_tag, SUBTAG_XOR); has_xor {
 				info.group = {name = xor_val, mode = .At_Most_One}
-			} else if val, ok := get_subtag(args_tag, SUBTAG_ONE_OF); ok {
-				info.group = {name = val, mode = .Exactly_One}
-			} else if val, ok := get_subtag(args_tag, SUBTAG_ANY_OF); ok {
-				info.group = {name = val, mode = .At_Least_One}
-			} else if val, ok := get_subtag(args_tag, SUBTAG_TOGETHER); ok {
-				info.group = {name = val, mode = .All_Or_None}
+			} else if one_of_val, has_one_of := get_subtag(args_tag, SUBTAG_ONE_OF); has_one_of {
+				info.group = {name = one_of_val, mode = .Exactly_One}
+			} else if any_of_val, has_any_of := get_subtag(args_tag, SUBTAG_ANY_OF); has_any_of {
+				info.group = {name = any_of_val, mode = .At_Least_One}
+			} else if together_val, has_together := get_subtag(args_tag, SUBTAG_TOGETHER); has_together {
+				info.group = {name = together_val, mode = .All_Or_None}
 			}
 
 			// Range tags.
@@ -158,9 +158,9 @@ extract_flags :: proc(data_type: typeid) -> []Flag_Info {
 			}
 
 			// Path tags.
-			if _, ok := get_subtag(args_tag, SUBTAG_FILE_EXISTS); ok { info.file_exists = true }
-			if _, ok := get_subtag(args_tag, SUBTAG_DIR_EXISTS); ok { info.dir_exists = true }
-			if _, ok := get_subtag(args_tag, SUBTAG_PATH_EXISTS); ok { info.path_exists = true }
+			if _, has_file := get_subtag(args_tag, SUBTAG_FILE_EXISTS); has_file { info.file_exists = true }
+			if _, has_dir := get_subtag(args_tag, SUBTAG_DIR_EXISTS); has_dir { info.dir_exists = true }
+			if _, has_path := get_subtag(args_tag, SUBTAG_PATH_EXISTS); has_path { info.path_exists = true }
 		}
 
 		// Auto-detect enum types.

@@ -277,7 +277,7 @@ make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 			model: Flags_Type
 			set_bool_field(&model, Flags_Type, greedy_field, true)
 			if cmd._action_ptr != nil {
-				action_proc := transmute(proc(^Flags_Type, string) -> int)cmd._action_ptr
+				action_proc := cast(proc(^Flags_Type, string) -> int)cmd._action_ptr
 				return action_proc(&model, program)
 			}
 			return 0
@@ -318,7 +318,7 @@ make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 
 		// Custom validator.
 		if cmd._validator_ptr != nil {
-			validator_proc := transmute(proc(^Flags_Type) -> string)cmd._validator_ptr
+			validator_proc := cast(proc(^Flags_Type) -> string)cmd._validator_ptr
 			if val_err := validator_proc(&model); len(val_err) > 0 {
 				write_validation_error(stderr, val_err, program, app.parsing_style, app.theme, mode)
 				return 1
@@ -326,7 +326,7 @@ make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 		}
 
 		if cmd._action_ptr != nil {
-			action_proc := transmute(proc(^Flags_Type, string) -> int)cmd._action_ptr
+			action_proc := cast(proc(^Flags_Type, string) -> int)cmd._action_ptr
 			return action_proc(&model, program)
 		}
 

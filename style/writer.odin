@@ -4,7 +4,6 @@ package style
 import "../term"
 import "core:fmt"
 import "core:io"
-import "core:log"
 import "core:strings"
 import "core:terminal/ansi"
 
@@ -207,9 +206,6 @@ Styled_Text_Formatter :: proc(fi: ^fmt.Info, arg: any, verb: rune) -> (res: bool
 		if styled_text.text == "" {
 			io.write_string(fi.writer, "")
 			return true
-		}
-		when ODIN_DEBUG {
-			defer log.debugf("Wrote %i bytes", fi.n)
 		}
 		return to_writer(fi.writer, styled_text^, &fi.n)
 	case 'w':

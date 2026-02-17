@@ -396,25 +396,25 @@ Example:
 */
 @(private)
 parse_split :: proc(input: string, allocator := context.temp_allocator) -> []string {
-	input := strings.to_lower(input, allocator = allocator)
+	lower := strings.to_lower(input, allocator = allocator)
 	result := make([dynamic]string, allocator = allocator)
-	if input == "" {
+	if lower == "" {
 		return result[:]
 	}
 	in_paren := false
 
 	temp_str := make([dynamic]string, 7, allocator = allocator)
-	for item in strings.fields_iterator(&input) {
+	for item in strings.fields_iterator(&lower) {
 		if in_paren {
 			if n := strings.count(item, ")"); n > 0 {
 				if n > 1 || !strings.has_suffix(item, ")") {
 					when ODIN_DEBUG {log.debugf("Attempting to fix incorrect string: %s", item)}
 					fixed := strings.split_after_n(item, ")", 2, allocator)
 					append(&temp_str, fixed[0])
-					if len(input) > 0 {
-						input = strings.join({fixed[1], input}, sep = " ", allocator = allocator)
+					if len(lower) > 0 {
+						lower = strings.join({fixed[1], lower}, sep = " ", allocator = allocator)
 					} else {
-						input = fixed[1]
+						lower = fixed[1]
 					}
 				} else {
 					append(&temp_str, item)

@@ -595,10 +595,18 @@ compute_alignment_padding :: proc(text_w: int, col_w: int, alignment: Alignment)
 	return 0, space
 }
 
+// Pre-built padding string for batched writes. Covers common widths without allocation.
+@(private = "file")
+PADDING_BUF :: "                                                                                                                                "
+
 @(private = "file")
 write_padding :: proc(w: io.Writer, count: int, n: ^int) -> bool {
-	for _ in 0 ..< count {
-		if !write_str(w, " ", n) do return false
+	buf := PADDING_BUF // local copy so we can slice with runtime indices
+	remaining := count
+	for remaining > 0 {
+		chunk := min(remaining, len(buf))
+		if !write_str(w, buf[:chunk], n) do return false
+		remaining -= chunk
 	}
 	return true
 }
