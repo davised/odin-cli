@@ -1,5 +1,6 @@
 package table
 
+/* Box-drawing character set defining the 11 junction and edge characters for table borders. */
 Border_Chars :: struct {
 	horizontal:   string,
 	vertical:     string,
@@ -14,6 +15,7 @@ Border_Chars :: struct {
 	cross:        string,
 }
 
+/* Border configuration: character set plus which edges (top, bottom, left, right) to render. */
 Border_Style :: struct {
 	chars:            Border_Chars,
 	top:              bool,
@@ -24,8 +26,10 @@ Border_Style :: struct {
 	header_separator: bool,
 }
 
+/* No borders — renders cells with padding only. */
 BORDER_NONE :: Border_Style{}
 
+/* ASCII border using +, -, and | characters. */
 BORDER_ASCII :: Border_Style {
 	chars = Border_Chars {
 		horizontal = "-",
@@ -48,6 +52,7 @@ BORDER_ASCII :: Border_Style {
 	header_separator = true,
 }
 
+/* Light box-drawing border (─ │ ┌ ┐ └ ┘). Default style. */
 BORDER_LIGHT :: Border_Style {
 	chars = Border_Chars {
 		horizontal = "─",
@@ -70,6 +75,7 @@ BORDER_LIGHT :: Border_Style {
 	header_separator = true,
 }
 
+/* Heavy box-drawing border (━ ┃ ┏ ┓ ┗ ┛). */
 BORDER_HEAVY :: Border_Style {
 	chars = Border_Chars {
 		horizontal = "━",
@@ -92,6 +98,7 @@ BORDER_HEAVY :: Border_Style {
 	header_separator = true,
 }
 
+/* Double-line box-drawing border (═ ║ ╔ ╗ ╚ ╝). */
 BORDER_DOUBLE :: Border_Style {
 	chars = Border_Chars {
 		horizontal = "═",
@@ -114,6 +121,7 @@ BORDER_DOUBLE :: Border_Style {
 	header_separator = true,
 }
 
+/* Rounded-corner border using light lines with arc corners (╭ ╮ ╰ ╯). */
 BORDER_ROUNDED :: Border_Style {
 	chars = Border_Chars {
 		horizontal = "─",

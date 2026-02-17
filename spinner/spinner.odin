@@ -1,4 +1,5 @@
 #+feature using-stmt
+// Animated terminal spinners with customizable frames and threaded auto-update.
 package spinner
 
 import "../style"
@@ -11,11 +12,13 @@ import "core:terminal/ansi"
 import "core:thread"
 import "core:time"
 
+/* Animation frame set: the string frames to cycle through and the interval between them. */
 Spinner_Frames :: struct {
 	frames:   []string,
 	interval: time.Duration,
 }
 
+/* Animated spinner state with optional styling, message, and background thread support. */
 Spinner :: struct {
 	frames:     Spinner_Frames,
 	message:    string,

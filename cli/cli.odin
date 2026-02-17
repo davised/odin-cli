@@ -1,3 +1,4 @@
+// Rich CLI framework wrapping core:flags with styled help output, validation, and shell completions.
 package cli
 
 import "base:runtime"

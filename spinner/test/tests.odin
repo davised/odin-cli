@@ -106,6 +106,35 @@ test_preset_frames :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_empty_frames :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	s := spinner.make_spinner(
+		frames = spinner.Spinner_Frames{interval = 100 * time.Millisecond},
+		message = "msg",
+	)
+	result, ok := spinner.to_str(s)
+	defer delete(result)
+
+	testing.expect(t, ok, "to_str should succeed with empty frames")
+	testing.expect_value(t, result, "")
+}
+
+@(test)
+test_single_frame :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	single := [?]string{"X"}
+	frames := spinner.Spinner_Frames{frames = single[:], interval = 100 * time.Millisecond}
+	s := spinner.make_spinner(frames = frames, message = "only")
+	result, ok := spinner.to_str(s)
+	defer delete(result)
+
+	testing.expect(t, ok, "to_str should succeed with single frame")
+	testing.expect_value(t, result, "X only")
+}
+
+@(test)
 test_plain_mode :: proc(t: ^testing.T) {
 	testing.set_fail_timeout(t, 5 * time.Second)
 

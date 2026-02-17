@@ -177,6 +177,48 @@ test_plain_mode :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_zero_total :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	p := progress.make_progress(0, width = 10, show_percentage = true)
+	result, ok := progress.to_str(p)
+	defer delete(result)
+
+	testing.expect(t, ok, "to_str should succeed with zero total")
+	testing.expect(t, strings.contains(result, "["), "should contain left cap")
+	testing.expect(t, strings.contains(result, "]"), "should contain right cap")
+	testing.expect(t, strings.contains(result, "0%"), "should show 0%")
+}
+
+@(test)
+test_negative_total :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	p := progress.make_progress(-5, width = 10, show_percentage = true)
+	result, ok := progress.to_str(p)
+	defer delete(result)
+
+	testing.expect(t, ok, "to_str should succeed with negative total")
+	testing.expect(t, strings.contains(result, "["), "should contain left cap")
+	testing.expect(t, strings.contains(result, "]"), "should contain right cap")
+}
+
+@(test)
+test_current_exceeds_total :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	p := progress.make_progress(100, width = 10, show_percentage = true)
+	p.current = 200 // Bypass update to exceed total directly
+	result, ok := progress.to_str(p)
+	defer delete(result)
+
+	testing.expect(t, ok, "to_str should succeed when current exceeds total")
+	testing.expect(t, strings.contains(result, "100%"), "should clamp to 100%")
+	testing.expect(t, strings.count(result, "\u2588") == 10, "should have full fill")
+	testing.expect(t, !strings.contains(result, "\u2591"), "should have no empty chars")
+}
+
+@(test)
 test_no_color_mode :: proc(t: ^testing.T) {
 	testing.set_fail_timeout(t, 5 * time.Second)
 

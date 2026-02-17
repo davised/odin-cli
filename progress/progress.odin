@@ -1,4 +1,5 @@
 #+feature using-stmt
+// Terminal progress bars with customizable styles, percentage, count, and elapsed time display.
 package progress
 
 import "../style"
@@ -8,6 +9,7 @@ import "core:os"
 import "core:terminal/ansi"
 import "core:time"
 
+/* Visual characters for progress bar rendering: caps, fill, empty, and optional head. */
 Bar_Style :: struct {
 	left_cap:  string,
 	right_cap: string,
@@ -16,6 +18,7 @@ Bar_Style :: struct {
 	head:      string,
 }
 
+/* Progress bar state: current/total values, display options, and optional fill styling. */
 Progress :: struct {
 	total:           int,
 	current:         int,

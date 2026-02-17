@@ -1,3 +1,4 @@
+// Tree rendering with customizable enumerators, width wrapping, and styled nodes.
 package tree
 
 import style "../style"

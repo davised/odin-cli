@@ -1,26 +1,32 @@
+// Formatted terminal tables with borders, alignment, wrapping, and column constraints.
 package table
 
 import "../style"
 
+/* Horizontal text alignment within a table cell. */
 Alignment :: enum {
 	Left,
 	Center,
 	Right,
 }
 
+/* Multi-segment styled text for cells with mixed formatting (e.g. bold key + plain value). */
 Rich_Text :: distinct []style.Styled_Text
 
+/* Cell content: plain string, single Styled_Text, or Rich_Text with multiple styled segments. */
 Cell_Content :: union {
 	string,
 	style.Styled_Text,
 	Rich_Text,
 }
 
+/* Single table cell with content and an optional per-cell alignment override. */
 Cell :: struct {
 	content:   Cell_Content,
 	alignment: Maybe(Alignment),
 }
 
+/* Column definition with header content, default alignment, and optional width constraints. */
 Column :: struct {
 	header:    Cell_Content,
 	alignment: Alignment,
@@ -28,16 +34,19 @@ Column :: struct {
 	max_width: int, // 0 = unlimited; if both set, max_width takes precedence
 }
 
+/* Table row containing cells and an optional row-level style applied to plain string cells. */
 Row :: struct {
 	cells: [dynamic]Cell,
 	style: Maybe(style.Style),
 }
 
+/* Header row configuration: optional style and separator line toggle. */
 Header_Config :: struct {
 	style:     Maybe(style.Style),
 	separator: bool,
 }
 
+/* Complete table: columns, rows, border style, width, padding, title, and wrapping options. */
 Table :: struct {
 	columns:               [dynamic]Column,
 	rows:                  [dynamic]Row,

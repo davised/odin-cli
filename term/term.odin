@@ -1,3 +1,4 @@
+// Terminal utilities: display width, text truncation, word wrapping, and render mode detection.
 package term
 
 import "core:os"

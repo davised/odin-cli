@@ -1,3 +1,4 @@
+// Text styling with ANSI colors, 8-bit, RGB, and text decorations for terminal output.
 package style
 
 // Text_Style represents ANSI SGR text style attributes. Values correspond to SGR parameter numbers.

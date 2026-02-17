@@ -447,6 +447,41 @@ test_no_color_mode :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(result, "styled"), "No_Color should preserve text")
 }
 
+@(test)
+test_max_depth_exceeded :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Build a chain of MAX_DEPTH+1 nested subtrees to trigger depth overflow.
+	// trees[0] is the deepest leaf, trees[N] is the root.
+	N :: tree.MAX_DEPTH + 1
+	trees: [N + 1]tree.Tree
+	child_storage: [N + 1][1]tree.Tree_Item
+
+	trees[0] = tree.Tree{root = "leaf"}
+	for i in 1 ..= N {
+		child_storage[i][0] = &trees[i - 1]
+		trees[i] = tree.Tree{root = "node", children = child_storage[i][:]}
+	}
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), trees[N])
+	testing.expect(t, !ok, "to_writer should return false when MAX_DEPTH exceeded")
+}
+
+@(test)
+test_nil_children :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	tr := tree.Tree{root = "x", children = nil}
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), tr)
+	testing.expect(t, ok, "to_writer should succeed with nil children")
+	testing.expect_value(t, strings.to_string(sb), "x\n")
+}
+
 // --- Builder tests ---
 
 @(test)

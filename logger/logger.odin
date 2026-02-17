@@ -1,4 +1,5 @@
 #+feature using-stmt
+// Structured logging with styled output, multiple sinks, and context.logger integration.
 package logger
 
 import "../style"
