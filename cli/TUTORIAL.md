@@ -443,6 +443,122 @@ valid
 
 ---
 
+## Custom Types and Flag Validation
+
+**Example:** `examples/tutorial_05_custom_types/main.odin`
+
+The `cli` package delegates parsing to `core:flags`, which supports two extension points:
+custom type setters and per-flag validators. Register these directly on `core:flags` before
+calling `cli.run()` or `cli.parse_or_exit()`.
+
+### Custom type setter
+
+Use `flags.register_type_setter` to teach the parser how to convert strings into your own
+types. Handle multiple types by switching on `data_type` — only one setter can be active at
+a time:
+
+```odin
+import "base:runtime"
+import "core:flags"
+import "core:strconv"
+import "core:strings"
+
+Semver :: struct { major, minor, patch: int }
+RGB :: struct { r, g, b: u8 }
+
+custom_type_setter :: proc(
+	data: rawptr,
+	data_type: typeid,
+	unparsed_value: string,
+	args_tag: string,
+) -> (error: string, handled: bool, alloc_error: runtime.Allocator_Error) {
+	switch data_type {
+	case Semver:
+		handled = true
+		ptr := cast(^Semver)data
+		parts := strings.split(unparsed_value, ".", context.temp_allocator)
+		if len(parts) != 3 {
+			error = "Expected semver like '1.2.3'."
+			return
+		}
+		major, major_ok := strconv.parse_int(parts[0])
+		minor, minor_ok := strconv.parse_int(parts[1])
+		patch, patch_ok := strconv.parse_int(parts[2])
+		if !major_ok || !minor_ok || !patch_ok {
+			error = "Semver components must be integers."
+			return
+		}
+		ptr^ = Semver{major, minor, patch}
+
+	case RGB:
+		handled = true
+		ptr := cast(^RGB)data
+		hex := strings.trim_prefix(unparsed_value, "#")
+		if len(hex) != 6 {
+			error = "Expected hex color like '#ff0000' or 'ff0000'."
+			return
+		}
+		r, r_ok := strconv.parse_uint(hex[0:2], 16)
+		g, g_ok := strconv.parse_uint(hex[2:4], 16)
+		b, b_ok := strconv.parse_uint(hex[4:6], 16)
+		if !r_ok || !g_ok || !b_ok {
+			error = "Invalid hex digits in color."
+			return
+		}
+		ptr^ = RGB{u8(r), u8(g), u8(b)}
+	}
+	return
+}
+```
+
+Return `handled = true` when the `data_type` matches your type. If it doesn't match,
+return `handled = false` and the default parser takes over. The type name (e.g. `<Semver>`)
+is shown automatically in `--help` output.
+
+### Per-flag validation
+
+Use `flags.register_flag_checker` to validate individual flags after parsing. Dispatch on
+the flag `name`:
+
+```odin
+import "core:flags"
+
+custom_flag_checker :: proc(
+	model: rawptr,
+	name: string,
+	value: any,
+	args_tag: string,
+) -> (error: string) {
+	if name == "port" {
+		port := value.(int)
+		if port < 1024 || port > 65535 {
+			error = "Port must be between 1024 and 65535."
+		}
+	}
+	return
+}
+```
+
+### Registration
+
+Register both on `core:flags` before calling `cli.run()` or `cli.parse_or_exit()`:
+
+```odin
+main :: proc() {
+	flags.register_type_setter(custom_type_setter)
+	flags.register_flag_checker(custom_flag_checker)
+
+	app := cli.make_app("server", ...)
+	cli.add_command(&app, Serve_Flags, "serve", ...)
+	os.exit(cli.run(&app, os.args))
+}
+```
+
+Both are globals — only one setter and one checker can be active at a time. Register them
+once before parsing. Pass `nil` to disable a previously registered setter or checker.
+
+---
+
 ## Quick Reference
 
 ### Struct Tags (`args:"..."`)
