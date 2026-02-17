@@ -638,3 +638,59 @@ test_builder_styled_items :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(output, "colored"), "expected colored text")
 	testing.expect(t, strings.contains(output, "plain"), "expected plain text")
 }
+
+@(test)
+test_deep_tree_prefix_buffer :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// 5-level deep tree with siblings — exact multiline output match.
+	l4 := [?]tree.Tree_Item{"leaf"}
+	t4 := tree.Tree{root = "d4", children = l4[:]}
+	l3 := [?]tree.Tree_Item{&t4, "sib3"}
+	t3 := tree.Tree{root = "d3", children = l3[:]}
+	l2 := [?]tree.Tree_Item{&t3, "sib2"}
+	t2 := tree.Tree{root = "d2", children = l2[:]}
+	l1 := [?]tree.Tree_Item{&t2, "sib1"}
+	t1 := tree.Tree{root = "d1", children = l1[:]}
+	top := [?]tree.Tree_Item{&t1, "other"}
+	tr := tree.Tree{root = "root", children = top[:]}
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), tr)
+	testing.expect(t, ok, "to_writer failed")
+
+	expected :=
+		"root\n" +
+		"├── d1\n" +
+		"│   ├── d2\n" +
+		"│   │   ├── d3\n" +
+		"│   │   │   ├── d4\n" +
+		"│   │   │   │   └── leaf\n" +
+		"│   │   │   └── sib3\n" +
+		"│   │   └── sib2\n" +
+		"│   └── sib1\n" +
+		"└── other\n"
+	testing.expect_value(t, strings.to_string(sb), expected)
+}
+
+@(test)
+test_tree_width_with_enumerator :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Width-constrained tree with ASCII_ENUMERATOR.
+	gc := [?]tree.Tree_Item{"very-long-filename.odin"}
+	sub := tree.Tree{root = "sub", children = gc[:]}
+	top := [?]tree.Tree_Item{&sub}
+	tr := tree.Tree{root = "root", children = top[:], width = 20}
+
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	ok := tree.to_writer(strings.to_writer(&sb), tr, tree.ASCII_ENUMERATOR)
+	testing.expect(t, ok, "to_writer failed")
+
+	output := strings.to_string(sb)
+	// Content should be wrapped — verify presence of continuation
+	testing.expect(t, strings.contains(output, "sub"), "should contain subtree root")
+	testing.expect(t, strings.contains(output, "very-long"), "should contain start of filename")
+}

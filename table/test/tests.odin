@@ -1181,3 +1181,130 @@ test_title_with_hidden_separator :: proc(t: ^testing.T) {
 		testing.expect_value(t, w, 40)
 	}
 }
+
+// --- Performance regression tests ---
+
+@(test)
+test_border_batched_horizontal :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Test all border styles with min_width columns produce consistent line widths.
+	borders := []table.Border_Style{
+		table.BORDER_ASCII,
+		table.BORDER_LIGHT,
+		table.BORDER_HEAVY,
+		table.BORDER_ROUNDED,
+		table.BORDER_DOUBLE,
+	}
+	for border in borders {
+		tbl := table.make_table(border = border)
+		defer table.destroy_table(&tbl)
+		table.add_column(&tbl, min_width = 5)
+		table.add_column(&tbl, min_width = 5)
+		table.add_row(&tbl, "a", "b")
+
+		result, ok := table.to_str(tbl)
+		defer delete(result)
+		testing.expect(t, ok, "border render should succeed")
+
+		// All lines should have the same width.
+		lines := strings.split(result, "\n")
+		defer delete(lines)
+		first_w := -1
+		for line in lines {
+			if line == "" do continue
+			w := table.text_display_width(line)
+			if first_w < 0 {
+				first_w = w
+			}
+			testing.expectf(t, w == first_w, "line width %d != expected %d", w, first_w)
+		}
+	}
+}
+
+@(test)
+test_border_wide_columns :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Width=200 table — verifies batched writes for wide border lines.
+	tbl := table.make_table(border = table.BORDER_ROUNDED)
+	defer table.destroy_table(&tbl)
+
+	tbl.width = 200
+	table.add_column(&tbl)
+	table.add_column(&tbl)
+	table.add_row(&tbl, "x", "y")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "wide table should succeed")
+	lines := strings.split(result, "\n")
+	defer delete(lines)
+	for line in lines {
+		if line == "" do continue
+		w := table.text_display_width(line)
+		testing.expect_value(t, w, 200)
+	}
+}
+
+@(test)
+test_cached_widths_regression :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Table with mixed truncated and non-truncated cells.
+	tbl := table.make_table(border = table.BORDER_ASCII)
+	defer table.destroy_table(&tbl)
+
+	table.add_column(&tbl, "Name", max_width = 8)
+	table.add_column(&tbl, "Description", max_width = 15)
+	table.add_row(&tbl, "short", "fits fine")
+	table.add_row(&tbl, "a very long name", "this description is way too long to fit")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "cached widths should succeed")
+	// All lines should have consistent widths.
+	lines := strings.split(result, "\n")
+	defer delete(lines)
+	first_w := -1
+	for line in lines {
+		if line == "" do continue
+		w := table.text_display_width(line)
+		if first_w < 0 {
+			first_w = w
+		}
+		testing.expect_value(t, w, first_w)
+	}
+}
+
+@(test)
+test_hide_separator_wrapped :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Wrapped table with hide_column_separator + fixed width.
+	tbl := table.make_table(
+		border = table.BORDER_ROUNDED,
+		hide_column_separator = true,
+		wrap = true,
+	)
+	defer table.destroy_table(&tbl)
+
+	tbl.width = 30
+	table.add_column(&tbl, min_width = 5, max_width = 5)
+	table.add_column(&tbl)
+	table.add_row(&tbl, "key", "a long value that must wrap across lines")
+
+	result, ok := table.to_str(tbl)
+	defer delete(result)
+
+	testing.expect(t, ok, "hide separator wrapped should succeed")
+	lines := strings.split(result, "\n")
+	defer delete(lines)
+	for line in lines {
+		if line == "" do continue
+		w := table.text_display_width(line)
+		testing.expect_value(t, w, 30)
+	}
+}

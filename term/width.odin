@@ -34,29 +34,34 @@ truncate :: proc(s: string, max_width: int, allocator := context.temp_allocator)
 	// Fast path: if byte length fits and all bytes are printable ASCII, no truncation needed.
 	if len(s) <= max_width && is_printable_ascii(s) do return s
 
-	_, _, total_width := utf8.grapheme_count(s)
-	if total_width <= max_width do return s
-	if max_width <= 1 do return ELLIPSIS
-
+	// Single-pass: walk graphemes tracking both budget cut point and max_width overflow.
+	// If iterator exhausts without exceeding max_width, the string fits — return as-is.
 	budget := max_width - 1 // reserve 1 column for ellipsis
 	it := utf8.decode_grapheme_iterator_make(s)
 	acc_width := 0
-	byte_end := len(s)
+	byte_end := 0 // byte offset where budget is exceeded (cut point for ellipsis)
+	found_cut := false
 
 	for _, grapheme in utf8.decode_grapheme_iterate(&it) {
-		if acc_width + grapheme.width > budget {
-			// This grapheme's byte_index is the start of the cluster
-			// that doesn't fit — i.e. the byte end of what DOES fit.
+		if acc_width + grapheme.width > max_width {
+			// Truncation confirmed — early exit.
+			if !found_cut {
+				byte_end = grapheme.byte_index
+			}
+			buf := make([]u8, byte_end + len(ELLIPSIS), allocator)
+			copy(buf[:byte_end], s[:byte_end])
+			copy(buf[byte_end:], ELLIPSIS)
+			return string(buf)
+		}
+		if !found_cut && acc_width + grapheme.width > budget {
 			byte_end = grapheme.byte_index
-			break
+			found_cut = true
 		}
 		acc_width += grapheme.width
 	}
 
-	buf := make([]u8, byte_end + len(ELLIPSIS), allocator)
-	copy(buf[:byte_end], s[:byte_end])
-	copy(buf[byte_end:], ELLIPSIS)
-	return string(buf)
+	// Iterator exhausted without exceeding max_width — string fits.
+	return s
 }
 
 /* Word_Wrap_Iterator yields lines of at most max_width display columns,
@@ -64,15 +69,16 @@ truncate :: proc(s: string, max_width: int, allocator := context.temp_allocator)
 	 breaking when a single word exceeds max_width. Each yielded line is a
 	 slice of the original string — zero allocation. */
 Word_Wrap_Iterator :: struct {
-	s:         string,
-	max_width: int,
-	offset:    int,
+	s:               string,
+	max_width:       int,
+	offset:          int,
+	remaining_width: int, // cached display width of s[offset:], avoids O(n) rescan
 }
 
 /* word_wrap_iterator_make creates a Word_Wrap_Iterator. If max_width <= 0,
 	 the entire string is yielded as a single line (unlimited). */
 word_wrap_iterator_make :: proc(s: string, max_width: int) -> Word_Wrap_Iterator {
-	return Word_Wrap_Iterator{s = s, max_width = max_width}
+	return Word_Wrap_Iterator{s = s, max_width = max_width, remaining_width = display_width(s)}
 }
 
 /* word_wrap_iterate returns the next word-wrapped line, or ok=false when exhausted.
@@ -84,12 +90,13 @@ word_wrap_iterate :: proc(it: ^Word_Wrap_Iterator) -> (line: string, ok: bool) {
 
 	if it.max_width <= 0 {
 		it.offset = len(it.s)
+		it.remaining_width = 0
 		return remaining, true
 	}
 
-	rem_w := display_width(remaining)
-	if rem_w <= it.max_width {
+	if it.remaining_width <= it.max_width {
 		it.offset = len(it.s)
+		it.remaining_width = 0
 		return remaining, true
 	}
 
@@ -98,6 +105,7 @@ word_wrap_iterate :: proc(it: ^Word_Wrap_Iterator) -> (line: string, ok: bool) {
 	acc_width := 0
 	byte_end := len(remaining)
 	last_space_byte := -1
+	last_space_width := 0 // accumulated width at last space
 
 	for _, grapheme in utf8.decode_grapheme_iterate(&git) {
 		if acc_width + grapheme.width > it.max_width {
@@ -106,6 +114,7 @@ word_wrap_iterate :: proc(it: ^Word_Wrap_Iterator) -> (line: string, ok: bool) {
 		}
 		if grapheme.byte_index < len(remaining) && remaining[grapheme.byte_index] == ' ' {
 			last_space_byte = grapheme.byte_index
+			last_space_width = acc_width
 		}
 		acc_width += grapheme.width
 	}
@@ -118,14 +127,25 @@ word_wrap_iterate :: proc(it: ^Word_Wrap_Iterator) -> (line: string, ok: bool) {
 	if last_space_byte > 0 {
 		line = remaining[:last_space_byte]
 		it.offset += last_space_byte + 1 // skip space
+		skipped := 1
+		// Skip leading spaces on next line.
+		for it.offset < len(it.s) && it.s[it.offset] == ' ' {
+			it.offset += 1
+			skipped += 1
+		}
+		it.remaining_width -= last_space_width + skipped
 	} else {
 		line = remaining[:byte_end]
 		it.offset += byte_end
-	}
-
-	// Skip leading spaces on next line.
-	for it.offset < len(it.s) && it.s[it.offset] == ' ' {
-		it.offset += 1
+		// acc_width covers graphemes before byte_end; for forced first-grapheme break
+		// (byte_end was 0, bumped to first_grapheme_size), acc_width = 0 — use display_width.
+		line_width := acc_width if acc_width > 0 else display_width(line)
+		it.remaining_width -= line_width
+		// Skip leading spaces on next line.
+		for it.offset < len(it.s) && it.s[it.offset] == ' ' {
+			it.offset += 1
+			it.remaining_width -= 1
+		}
 	}
 
 	return line, true
@@ -136,7 +156,7 @@ word_wrap_iterate :: proc(it: ^Word_Wrap_Iterator) -> (line: string, ok: bool) {
 	 Word_Wrap_Iterator. Returns a temp-allocated slice of string slices into
 	 the original string — no string allocation. */
 word_wrap :: proc(s: string, max_width: int) -> []string {
-	it := Word_Wrap_Iterator{s = s, max_width = max_width}
+	it := word_wrap_iterator_make(s, max_width)
 	lines := make([dynamic]string, 0, 4, context.temp_allocator)
 	for line in word_wrap_iterate(&it) {
 		append(&lines, line)

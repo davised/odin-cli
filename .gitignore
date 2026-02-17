@@ -11,6 +11,9 @@ examples/tutorial_04_advanced/tutorial_04_advanced
 # OS
 .DS_Store
 
+# Profiling
+*.spall
+
 # Editor / tools
 .aider*
 .env

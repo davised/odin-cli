@@ -31,7 +31,7 @@ to_writer :: proc(w: io.Writer, t: Table, n: ^int = nil, mode: term.Render_Mode 
 		t.border = BORDER_NONE
 	}
 
-	widths := compute_column_widths(t)
+	widths, cache := compute_column_widths_cached(t)
 	has_headers := has_header_content(t)
 
 	// Top border
@@ -47,7 +47,7 @@ to_writer :: proc(w: io.Writer, t: Table, n: ^int = nil, mode: term.Render_Mode 
 				content = col.header,
 			}
 		}
-		if !write_row(w, t, header_cells, widths, t.header_config.style, n, mode) do return false
+		if !write_row(w, t, header_cells, widths, t.header_config.style, n, mode, &cache, -1) do return false
 
 		if t.header_config.separator && t.border.header_separator {
 			if !write_border_line(w, t, widths, .Middle, n, mode) do return false
@@ -56,7 +56,7 @@ to_writer :: proc(w: io.Writer, t: Table, n: ^int = nil, mode: term.Render_Mode 
 
 	// Data rows
 	for row, row_idx in t.rows {
-		if !write_row(w, t, row.cells[:], widths, row.style, n, mode) do return false
+		if !write_row(w, t, row.cells[:], widths, row.style, n, mode, &cache, row_idx) do return false
 
 		if t.border.row_separator && row_idx < len(t.rows) - 1 {
 			if !write_border_line(w, t, widths, .Middle, n, mode) do return false
@@ -135,13 +135,14 @@ write_border_line :: proc(
 	mode: term.Render_Mode = .Full,
 ) -> bool {
 	chars := t.border.chars
+	sep_w := text_display_width(chars.vertical)
 
 	// Calculate total inner width (content + padding + separator slots).
 	inner_width := 0
 	for col_idx := 0; col_idx < len(widths); col_idx += 1 {
 		inner_width += widths[col_idx] + 2 * t.padding
 		if col_idx < len(widths) - 1 {
-			inner_width += text_display_width(chars.vertical) // separator slot
+			inner_width += sep_w // separator slot
 		}
 	}
 
@@ -162,14 +163,10 @@ write_border_line :: proc(
 			if !write_cell_content(w, t.title, cell_text(t.title), nil, n, mode) do return false
 			if !write_str(w, " ", n) do return false
 			remaining := inner_width - (1 + 1 + title_w + 1) // horizontal + space + title + space
-			for _ in 0 ..< remaining {
-				if !write_str(w, chars.horizontal, n) do return false
-			}
+			if !write_repeated(w, chars.horizontal, remaining, n) do return false
 		} else {
 			// Not enough room for title, just fill with horizontal.
-			for _ in 0 ..< inner_width {
-				if !write_str(w, chars.horizontal, n) do return false
-			}
+			if !write_repeated(w, chars.horizontal, inner_width, n) do return false
 		}
 
 		if t.border.right {
@@ -195,13 +192,11 @@ write_border_line :: proc(
 
 	for col_idx := 0; col_idx < len(widths); col_idx += 1 {
 		total := widths[col_idx] + 2 * t.padding
-		for _ in 0 ..< total {
-			if !write_str(w, chars.horizontal, n) do return false
-		}
+		if !write_repeated(w, chars.horizontal, total, n) do return false
 
 		if col_idx < len(widths) - 1 {
 			if t.hide_column_separator {
-				if !write_str(w, chars.horizontal, n) do return false
+				if !write_repeated(w, chars.horizontal, 1, n) do return false
 			} else {
 				tee := chars.top_tee
 				switch pos {
@@ -239,11 +234,13 @@ write_row :: proc(
 	fallback_style: Maybe(style.Style),
 	n: ^int,
 	mode: term.Render_Mode,
+	cache: ^Cell_Width_Cache,
+	row_idx: int,
 ) -> bool {
 	if t.wrap {
-		return write_row_wrapped(w, t, cells, widths, fallback_style, n, mode)
+		return write_row_wrapped(w, t, cells, widths, fallback_style, n, mode, cache, row_idx)
 	}
-	return write_row_truncated(w, t, cells, widths, fallback_style, n, mode)
+	return write_row_truncated(w, t, cells, widths, fallback_style, n, mode, cache, row_idx)
 }
 
 @(private = "file")
@@ -255,8 +252,11 @@ write_row_truncated :: proc(
 	fallback_style: Maybe(style.Style),
 	n: ^int,
 	mode: term.Render_Mode,
+	cache: ^Cell_Width_Cache,
+	row_idx: int,
 ) -> bool {
 	num_cols := len(t.columns)
+	vert_sep_w := text_display_width(t.border.chars.vertical) if t.hide_column_separator else 0
 
 	if t.border.left {
 		if !write_str(w, t.border.chars.vertical, n) do return false
@@ -277,29 +277,40 @@ write_row_truncated :: proc(
 
 		content := cell.content
 		content_w: int
+		// Use cached width to avoid redundant display_width calls.
+		cached_w := cache_get(cache, row_idx, col_idx) if col_idx < len(cells) else 0
 
 		// For Rich_Text, truncate across segments and compute width from the truncated result.
 		truncated_rt: Rich_Text
 		if rt, is_rt := content.(Rich_Text); is_rt {
-			truncated_rt = truncate_rich_text(rt, effective_width)
-			content_w = 0
-			for seg in truncated_rt {
-				content_w += text_display_width(seg.text)
+			if cached_w <= effective_width {
+				content_w = cached_w
+			} else {
+				truncated_rt = truncate_rich_text(rt, effective_width)
+				content_w = 0
+				for seg in truncated_rt {
+					content_w += text_display_width(seg.text)
+				}
 			}
 		} else {
-			text := cell_text(content)
-			text = truncate_text(text, effective_width)
-			content_w = text_display_width(text)
-			// Update content with truncated text for write_cell_content.
-			switch c in content {
-			case string:
-				content = text
-			case style.Styled_Text:
-				content = style.Styled_Text{text = text, style = c.style}
-			case Rich_Text:
-				// handled above
-			case:
-				// nil
+			if cached_w <= effective_width {
+				// No truncation needed — use cached width directly.
+				content_w = cached_w
+			} else {
+				text := cell_text(content)
+				text = truncate_text(text, effective_width)
+				content_w = text_display_width(text)
+				// Update content with truncated text for write_cell_content.
+				switch c in content {
+				case string:
+					content = text
+				case style.Styled_Text:
+					content = style.Styled_Text{text = text, style = c.style}
+				case Rich_Text:
+					// handled above
+				case:
+					// nil
+				}
 			}
 		}
 
@@ -324,9 +335,7 @@ write_row_truncated :: proc(
 		// Column separator
 		if col_idx < num_cols - 1 {
 			if t.hide_column_separator {
-				// Replace vertical separator with spaces of equal width.
-				sep_w := text_display_width(t.border.chars.vertical)
-				if !write_padding(w, sep_w, n) do return false
+				if !write_padding(w, vert_sep_w, n) do return false
 			} else {
 				if !write_str(w, t.border.chars.vertical, n) do return false
 			}
@@ -353,8 +362,11 @@ write_row_wrapped :: proc(
 	fallback_style: Maybe(style.Style),
 	n: ^int,
 	mode: term.Render_Mode,
+	cache: ^Cell_Width_Cache,
+	row_idx: int,
 ) -> bool {
 	num_cols := len(t.columns)
+	vert_sep_w := text_display_width(t.border.chars.vertical) if t.hide_column_separator else 0
 
 	// Stack-allocated arrays for zero-alloc wrapping (common case).
 	line_counts_buf: [MAX_WRAP_COLS]int
@@ -373,7 +385,7 @@ write_row_wrapped :: proc(
 			cell = cells[col_idx]
 		}
 
-		cw := display_width(cell.content)
+		cw := cache_get(cache, row_idx, col_idx) if col_idx < len(cells) else 0
 
 		if cw <= ew || ew <= 0 || cell.content == nil {
 			line_counts[col_idx] = 1
@@ -459,7 +471,7 @@ write_row_wrapped :: proc(
 			} else if line_idx == 0 {
 				// Single-line cell: render content directly (with Rich_Text truncation).
 				content := cell.content
-				cw := display_width(content)
+				cw := cache_get(cache, row_idx, col_idx) if col_idx < len(cells) else 0
 
 				if rt, is_rt := content.(Rich_Text); is_rt && cw > ew && ew > 0 {
 					truncated := truncate_rich_text(rt, ew)
@@ -487,8 +499,7 @@ write_row_wrapped :: proc(
 			// Column separator.
 			if col_idx < num_cols - 1 {
 				if t.hide_column_separator {
-					sep_w := text_display_width(t.border.chars.vertical)
-					if !write_padding(w, sep_w, n) do return false
+					if !write_padding(w, vert_sep_w, n) do return false
 				} else {
 					if !write_str(w, t.border.chars.vertical, n) do return false
 				}
@@ -593,6 +604,43 @@ compute_alignment_padding :: proc(text_w: int, col_w: int, alignment: Alignment)
 		return
 	}
 	return 0, space
+}
+
+// write_repeated writes string s repeated count times using a pre-filled stack buffer.
+@(private = "file")
+write_repeated :: proc(w: io.Writer, s: string, count: int, n: ^int) -> bool {
+	if count <= 0 do return true
+	s_bytes := transmute([]u8)s
+	s_len := len(s_bytes)
+	if s_len == 0 do return true
+
+	buf: [512]u8
+	// Pre-fill buffer with copies of s, capped at what we'll actually write
+	total_needed := count * s_len
+	fill_limit := min(total_needed, len(buf))
+	filled := 0
+	for filled + s_len <= fill_limit {
+		copy(buf[filled:filled + s_len], s_bytes)
+		filled += s_len
+	}
+	if filled == 0 {
+		// s is larger than buf — write one at a time
+		for _ in 0 ..< count {
+			if !write_str(w, s, n) do return false
+		}
+		return true
+	}
+
+	remaining := count
+	for remaining > 0 {
+		// How many copies fit in filled bytes
+		copies_in_buf := filled / s_len
+		batch := min(remaining, copies_in_buf)
+		chunk := batch * s_len
+		if !write_str(w, string(buf[:chunk]), n) do return false
+		remaining -= batch
+	}
+	return true
 }
 
 // Pre-built padding string for batched writes. Covers common widths without allocation.

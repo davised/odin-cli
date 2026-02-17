@@ -1,6 +1,7 @@
 package term_test
 
 import term ".."
+import "core:strings"
 import "core:testing"
 import "core:time"
 
@@ -97,6 +98,33 @@ test_truncate_preserves_graphemes :: proc(t: ^testing.T) {
 	testing.expect_value(t, term.truncate(s, 4), s)
 	// Truncate to 3: budget=2, c(1)+a(1)=2, f would be 3 > 2
 	testing.expect_value(t, term.truncate(s, 3), "ca…")
+}
+
+@(test)
+test_truncate_boundary_cases :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Exact fit — no truncation
+	testing.expect_value(t, term.truncate("abcde", 5), "abcde")
+	// One over — truncation
+	testing.expect_value(t, term.truncate("abcdef", 5), "abcd…")
+	// Negative max_width treated as unlimited
+	testing.expect_value(t, term.truncate("hello", -1), "hello")
+	// CJK boundary: "你好世" = 6 cols, max_width=5 → budget=4, "你好"=4 fits, "世" would exceed
+	testing.expect_value(t, term.truncate("你好世", 5), "你好…")
+	// CJK boundary: max_width=4 → budget=3, "你"=2 fits, "好"=4 would exceed
+	testing.expect_value(t, term.truncate("你好世", 4), "你…")
+}
+
+@(test)
+test_truncate_long_string :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// 200-char ASCII truncated to 5 — verifies early exit
+	long := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP"
+	result := term.truncate(long, 5)
+	testing.expect_value(t, result, "abcd…")
+	testing.expect_value(t, term.display_width(result), 5)
 }
 
 // --- Wrap iterator tests ---
@@ -253,6 +281,38 @@ test_word_wrap_empty :: proc(t: ^testing.T) {
 	lines := term.word_wrap("", 10)
 	testing.expect_value(t, len(lines), 1)
 	testing.expect_value(t, lines[0], "")
+}
+
+@(test)
+test_word_wrap_long_text :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Long sentence wrapped at width 20 — verify all lines fit and content preserved.
+	text := "the quick brown fox jumps over the lazy dog near the river bank"
+	lines := term.word_wrap(text, 20)
+	testing.expect(t, len(lines) >= 3, "long text should produce multiple lines")
+	for line, i in lines {
+		w := term.display_width(line)
+		testing.expectf(t, w <= 20, "line %d width %d exceeds 20: '%s'", i, w, line)
+	}
+}
+
+@(test)
+test_word_wrap_preserves_content :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Rejoin all lines with spaces equals original (modulo leading/trailing).
+	text := "hello world foo bar baz qux"
+	lines := term.word_wrap(text, 10)
+
+	// Rebuild by joining with spaces.
+	sb := strings.builder_make()
+	defer strings.builder_destroy(&sb)
+	for line, i in lines {
+		if i > 0 do strings.write_byte(&sb, ' ')
+		strings.write_string(&sb, line)
+	}
+	testing.expect_value(t, strings.to_string(sb), text)
 }
 
 @(test)

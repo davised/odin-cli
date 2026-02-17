@@ -30,59 +30,7 @@ text_display_width :: proc(s: string) -> int {
 	 accounting for content, min/max constraints, and padding.
 	 Returns a temp-allocated slice. */
 compute_column_widths :: proc(t: Table) -> []int {
-	num_cols := len(t.columns)
-	if num_cols == 0 {
-		return nil
-	}
-
-	widths := make([]int, num_cols, context.temp_allocator)
-
-	// Start with header widths
-	for col, i in t.columns {
-		widths[i] = display_width(col.header)
-	}
-
-	// Expand to fit cell contents
-	for row in t.rows {
-		for cell, i in row.cells {
-			if i >= num_cols do break
-			w := display_width(cell.content)
-			if w > widths[i] {
-				widths[i] = w
-			}
-		}
-	}
-
-	// Apply min/max constraints
-	for col, i in t.columns {
-		if col.min_width > 0 && widths[i] < col.min_width {
-			widths[i] = col.min_width
-		}
-		if col.max_width > 0 && widths[i] > col.max_width {
-			widths[i] = col.max_width
-		}
-	}
-
-	// Fill to target width
-	if t.width > 0 {
-		overhead := border_overhead(t, num_cols)
-		available := t.width - overhead
-		if available < num_cols {
-			available = num_cols // minimum 1 per column
-		}
-
-		current_total := 0
-		for w in widths {
-			current_total += w
-		}
-
-		if available > current_total {
-			distribute_extra(widths, t.columns[:], available - current_total)
-		} else if available < current_total {
-			distribute_deficit(widths, t.columns[:], current_total - available)
-		}
-	}
-
+	widths, _ := compute_column_widths_cached(t)
 	return widths
 }
 
@@ -240,6 +188,92 @@ distribute_deficit :: proc(widths: []int, columns: []Column, deficit: int) {
 			if all_locked do break
 		}
 	}
+}
+
+// Cell_Width_Cache stores pre-computed display widths for all cells and headers.
+// Avoids redundant display_width calls during rendering.
+@(private)
+Cell_Width_Cache :: struct {
+	header_widths: []int, // [num_cols]
+	cell_widths:   []int, // flat: [row * num_cols + col]
+	num_cols:      int,
+}
+
+// Looks up cached cell width. row_idx < 0 means header row.
+@(private)
+cache_get :: proc(cache: ^Cell_Width_Cache, row_idx: int, col_idx: int) -> int {
+	if row_idx < 0 {
+		return cache.header_widths[col_idx]
+	}
+	return cache.cell_widths[row_idx * cache.num_cols + col_idx]
+}
+
+// compute_column_widths_cached computes column widths and also populates a cell width cache.
+@(private)
+compute_column_widths_cached :: proc(t: Table) -> ([]int, Cell_Width_Cache) {
+	num_cols := len(t.columns)
+	if num_cols == 0 {
+		return nil, Cell_Width_Cache{}
+	}
+
+	cache := Cell_Width_Cache {
+		header_widths = make([]int, num_cols, context.temp_allocator),
+		cell_widths   = make([]int, len(t.rows) * num_cols, context.temp_allocator),
+		num_cols      = num_cols,
+	}
+
+	widths := make([]int, num_cols, context.temp_allocator)
+
+	// Start with header widths
+	for col, i in t.columns {
+		w := display_width(col.header)
+		cache.header_widths[i] = w
+		widths[i] = w
+	}
+
+	// Expand to fit cell contents
+	for row, row_idx in t.rows {
+		for cell, i in row.cells {
+			if i >= num_cols do break
+			w := display_width(cell.content)
+			cache.cell_widths[row_idx * num_cols + i] = w
+			if w > widths[i] {
+				widths[i] = w
+			}
+		}
+	}
+
+	// Apply min/max constraints
+	for col, i in t.columns {
+		if col.min_width > 0 && widths[i] < col.min_width {
+			widths[i] = col.min_width
+		}
+		if col.max_width > 0 && widths[i] > col.max_width {
+			widths[i] = col.max_width
+		}
+	}
+
+	// Fill to target width
+	if t.width > 0 {
+		overhead := border_overhead(t, num_cols)
+		available := t.width - overhead
+		if available < num_cols {
+			available = num_cols
+		}
+
+		current_total := 0
+		for w in widths {
+			current_total += w
+		}
+
+		if available > current_total {
+			distribute_extra(widths, t.columns[:], available - current_total)
+		} else if available < current_total {
+			distribute_deficit(widths, t.columns[:], current_total - available)
+		}
+	}
+
+	return widths, cache
 }
 
 /* truncate_text truncates a string to fit within max_width display columns,

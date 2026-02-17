@@ -420,3 +420,91 @@ test_to_writer_plain_empty :: proc(t: ^testing.T) {
 	testing.expect(t, ok, "Plain empty text should succeed")
 	testing.expect_value(t, result, "")
 }
+
+@(test)
+test_ansi_complex_style :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// bold+italic+underline + RGB fg + ANSI bg
+	st := style.Styled_Text {
+		text = "test",
+		style = style.Style {
+			text_styles = {.Bold, .Italic, .Underline},
+			foreground_color = style.RGB{255, 128, 0},
+			background_color = style.ANSI_Color.Blue,
+		},
+	}
+	result, ok := style.to_str(st)
+	defer delete(result)
+
+	testing.expect(t, ok, "complex style should succeed")
+	testing.expect_value(t, result, "\x1b[1;3;4m\x1b[38;2;255;128;0m\x1b[44mtest\x1b[0m")
+}
+
+@(test)
+test_ansi_styles_only :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	st := style.Styled_Text {
+		text  = "hello",
+		style = style.Style{text_styles = {.Bold}},
+	}
+	result, ok := style.to_str(st)
+	defer delete(result)
+
+	testing.expect(t, ok, "bold-only should succeed")
+	testing.expect_value(t, result, "\x1b[1mhello\x1b[0m")
+}
+
+@(test)
+test_ansi_eightbit :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	st := style.Styled_Text {
+		text = "hi",
+		style = style.Style {
+			foreground_color = style.EightBit(42),
+			background_color = style.EightBit(200),
+		},
+	}
+	result, ok := style.to_str(st)
+	defer delete(result)
+
+	testing.expect(t, ok, "8-bit colors should succeed")
+	testing.expect_value(t, result, "\x1b[38;5;42m\x1b[48;5;200mhi\x1b[0m")
+}
+
+@(test)
+test_ansi_rgb_fg_bg :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	st := style.Styled_Text {
+		text = "x",
+		style = style.Style {
+			foreground_color = style.RGB{10, 20, 30},
+			background_color = style.RGB{200, 100, 50},
+		},
+	}
+	result, ok := style.to_str(st)
+	defer delete(result)
+
+	testing.expect(t, ok, "RGB fg+bg should succeed")
+	testing.expect_value(t, result, "\x1b[38;2;10;20;30m\x1b[48;2;200;100;50mx\x1b[0m")
+}
+
+@(test)
+test_ansi_all_text_styles :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	st := style.Styled_Text {
+		text = "z",
+		style = style.Style {
+			text_styles = {.Bold, .Italic, .Underline, .Blink_Slow, .Blink_Rapid, .Invert, .Hide, .Strike},
+		},
+	}
+	result, ok := style.to_str(st)
+	defer delete(result)
+
+	testing.expect(t, ok, "all text styles should succeed")
+	testing.expect_value(t, result, "\x1b[1;3;4;5;6;7;8;9mz\x1b[0m")
+}

@@ -137,30 +137,121 @@ to_writer :: proc(
 	has_colors := styled_text.style.foreground_color != nil || styled_text.style.background_color != nil
 	needs_ansi := (mode == .Full && (has_styles || has_colors)) || (mode == .No_Color && has_styles)
 
-	if has_styles {
-		if text_styles_to_writer(writer, styled_text.style.text_styles, n) != io.Error.None {
-			return false
-		}
-	}
-	if mode == .Full {
-		if color_to_writer(writer, styled_text.style.foreground_color, false, n) != io.Error.None {
-			return false
-		}
-		if color_to_writer(writer, styled_text.style.background_color, true, n) != io.Error.None {
-			return false
-		}
-	}
-
-	// Write text, and append reset only if we emitted any SGR sequences
 	if needs_ansi {
-		if text_to_writer(writer, styled_text.text, n) != io.Error.None {
-			return false
+		// Build ANSI prefix into stack buffer, write once.
+		// Worst case: text styles (18B) + RGB fg (19B) + RGB bg (19B) = 56B; 96B is safe.
+		buf: [96]u8
+		pos := 0
+
+		if has_styles {
+			pos += write_text_styles_to_buf(buf[pos:], styled_text.style.text_styles)
 		}
+		if mode == .Full {
+			pos += write_color_to_buf(buf[pos:], styled_text.style.foreground_color, false)
+			pos += write_color_to_buf(buf[pos:], styled_text.style.background_color, true)
+		}
+
+		// Write prefix + text + reset as 3 writes max.
+		if pos > 0 {
+			if !_write_str(writer, string(buf[:pos]), n) do return false
+		}
+		if !_write_str(writer, styled_text.text, n) do return false
+		if !_write_str(writer, "\x1b[0m", n) do return false
 	} else {
 		_, err := io.write_string(writer, styled_text.text, n)
 		if err != .None do return false
 	}
 	return true
+}
+
+// Writes text styles SGR sequence into buf. Returns bytes written.
+@(private = "file")
+write_text_styles_to_buf :: proc(buf: []u8, s: Text_Style_Set) -> int {
+	if s == {} do return 0
+	pos := 0
+	// CSI = "\x1b["
+	buf[pos] = 0x1b; pos += 1
+	buf[pos] = '['; pos += 1
+	first := true
+	for style in s {
+		if !first {
+			buf[pos] = ';'; pos += 1
+		}
+		pos += write_uint_to_buf(buf[pos:], uint(style))
+		first = false
+	}
+	// SGR = "m"
+	buf[pos] = 'm'; pos += 1
+	return pos
+}
+
+// Writes a color SGR sequence into buf. Returns bytes written.
+@(private = "file")
+write_color_to_buf :: proc(buf: []u8, data: Colors, bg: bool) -> int {
+	pos := 0
+	#partial switch c in data {
+	case ANSI_Color:
+		// CSI + code + SGR: e.g. "\x1b[31m"
+		buf[pos] = 0x1b; pos += 1
+		buf[pos] = '['; pos += 1
+		pos += write_uint_to_buf(buf[pos:], uint(c) + (10 if bg else 0))
+		buf[pos] = 'm'; pos += 1
+	case EightBit:
+		// "\x1b[38;5;Nm" or "\x1b[48;5;Nm"
+		buf[pos] = 0x1b; pos += 1
+		buf[pos] = '['; pos += 1
+		if bg {
+			for b in transmute([]u8)string("48;5;") { buf[pos] = b; pos += 1 }
+		} else {
+			for b in transmute([]u8)string("38;5;") { buf[pos] = b; pos += 1 }
+		}
+		pos += write_uint_to_buf(buf[pos:], uint(c))
+		buf[pos] = 'm'; pos += 1
+	case RGB:
+		// "\x1b[38;2;R;G;Bm" or "\x1b[48;2;R;G;Bm"
+		buf[pos] = 0x1b; pos += 1
+		buf[pos] = '['; pos += 1
+		if bg {
+			for b in transmute([]u8)string("48;2;") { buf[pos] = b; pos += 1 }
+		} else {
+			for b in transmute([]u8)string("38;2;") { buf[pos] = b; pos += 1 }
+		}
+		pos += write_uint_to_buf(buf[pos:], uint(c.r))
+		buf[pos] = ';'; pos += 1
+		pos += write_uint_to_buf(buf[pos:], uint(c.g))
+		buf[pos] = ';'; pos += 1
+		pos += write_uint_to_buf(buf[pos:], uint(c.b))
+		buf[pos] = 'm'; pos += 1
+	}
+	return pos
+}
+
+// Formats a uint into decimal digits in buf. Returns bytes written.
+@(private = "file")
+write_uint_to_buf :: proc(buf: []u8, val: uint) -> int {
+	if val == 0 {
+		buf[0] = '0'
+		return 1
+	}
+	// Write digits in reverse, then reverse in place.
+	digits: [10]u8
+	count := 0
+	v := val
+	for v > 0 {
+		digits[count] = u8(v % 10) + '0'
+		v /= 10
+		count += 1
+	}
+	for i in 0 ..< count {
+		buf[i] = digits[count - 1 - i]
+	}
+	return count
+}
+
+@(private = "file")
+_write_str :: proc(w: io.Writer, s: string, n: ^int) -> bool {
+	_, err := io.write_string(w, s, n)
+	return err == .None
 }
 
 /*

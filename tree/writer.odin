@@ -10,6 +10,27 @@ import "core:strings"
 // 64 levels handles any practical tree; exceeding this returns false.
 MAX_DEPTH :: 64
 
+// Cached_Enum_Widths stores pre-computed display widths for an enumerator's 4 strings.
+@(private = "file")
+Cached_Enum_Widths :: struct {
+	e:           ^Enumerator,
+	item_w:      int,
+	last_item_w: int,
+	branch_w:    int,
+	padding_w:   int,
+}
+
+@(private = "file")
+make_cached_enum_widths :: proc(e: ^Enumerator) -> Cached_Enum_Widths {
+	return Cached_Enum_Widths {
+		e           = e,
+		item_w      = term.display_width(e.item),
+		last_item_w = term.display_width(e.last_item),
+		branch_w    = term.display_width(e.branch),
+		padding_w   = term.display_width(e.padding),
+	}
+}
+
 @(private = "file")
 Render_State :: struct {
 	w:                  io.Writer,
@@ -20,6 +41,8 @@ Render_State :: struct {
 	max_width:          int,
 	prefix_width:       int, // cached cumulative display width of prefix[0..depth-1]
 	mode:               term.Render_Mode,
+	prefix_buf:         [MAX_DEPTH * 8]u8, // pre-concatenated prefix bytes
+	prefix_buf_len:     int,               // current length of prefix_buf content
 }
 
 @(private = "file")
@@ -30,8 +53,9 @@ write_str :: proc(state: ^Render_State, s: string) -> bool {
 
 @(private = "file")
 write_prefix :: proc(state: ^Render_State) -> bool {
-	for d in 0 ..< state.depth {
-		write_str(state, state.prefix[d]) or_return
+	if state.prefix_buf_len > 0 {
+		_, err := io.write_string(state.w, string(state.prefix_buf[:state.prefix_buf_len]), state.n)
+		return err == .None
 	}
 	return true
 }
@@ -120,7 +144,8 @@ to_writer :: proc(w: io.Writer, t: Tree, enumerator: Enumerator = DEFAULT_ENUMER
 
 	// Render children
 	enum_ptr := t.enumerator if t.enumerator != nil else &state.default_enumerator
-	render_children(&state, t.children, enum_ptr) or_return
+	cew := make_cached_enum_widths(enum_ptr)
+	render_children(&state, t.children, enum_ptr, &cew) or_return
 
 	return true
 }
@@ -155,8 +180,9 @@ to_str :: proc(
 
 /* Renders all children of a node at the current depth. */
 @(private = "file")
-render_children :: proc(state: ^Render_State, children: []Tree_Item, e: ^Enumerator) -> bool {
+render_children :: proc(state: ^Render_State, children: []Tree_Item, e: ^Enumerator, cew: ^Cached_Enum_Widths) -> bool {
 	count := len(children)
+
 	for child, i in children {
 		is_last := i == count - 1
 
@@ -170,10 +196,10 @@ render_children :: proc(state: ^Render_State, children: []Tree_Item, e: ^Enumera
 		// Continuation prefix for wrapped lines (same width, maintains vertical lines)
 		cont_prefix := e.padding if is_last else e.branch
 
-		// Compute content budget using cached prefix width
+		// Compute content budget using cached prefix width and cached connector width
 		content_budget := 0
 		if state.max_width > 0 {
-			connector_width := term.display_width(connector)
+			connector_width := cew.last_item_w if is_last else cew.item_w
 			content_budget = state.max_width - state.prefix_width - connector_width
 			if content_budget < 1 {
 				content_budget = 1
@@ -194,13 +220,31 @@ render_children :: proc(state: ^Render_State, children: []Tree_Item, e: ^Enumera
 				return false
 			}
 			state.prefix[state.depth] = cont_prefix
-			cont_width := term.display_width(cont_prefix)
+			cont_width := cew.padding_w if is_last else cew.branch_w
+
+			// Push to prefix buffer
+			old_buf_len := state.prefix_buf_len
+			cp_bytes := transmute([]u8)cont_prefix
+			if old_buf_len + len(cp_bytes) > len(state.prefix_buf) {
+				return false
+			}
+			copy(state.prefix_buf[old_buf_len:], cp_bytes)
+			state.prefix_buf_len += len(cp_bytes)
+
 			state.prefix_width += cont_width
 			state.depth += 1
 			sub_enum := c.enumerator if c.enumerator != nil else e
-			render_children(state, c.children, sub_enum) or_return
+			// Only recompute cached widths if enumerator changed
+			sub_cew: Cached_Enum_Widths
+			if sub_enum != e {
+				sub_cew = make_cached_enum_widths(sub_enum)
+			} else {
+				sub_cew = cew^
+			}
+			render_children(state, c.children, sub_enum, &sub_cew) or_return
 			state.depth -= 1
 			state.prefix_width -= cont_width
+			state.prefix_buf_len = old_buf_len
 		}
 	}
 	return true
