@@ -96,6 +96,8 @@ color_to_writer :: proc(w: io.Writer, data: Colors, bg: bool, n: ^int) -> io.Err
 
 /*
 text_to_writer writes the text content followed by an ANSI reset sequence (`\e[0m`).
+Text is written verbatim; callers passing untrusted input should sanitize
+with `term.strip_ansi` first.
 
 Inputs:
 - w: The writer to output text to.
@@ -113,6 +115,8 @@ text_to_writer :: proc(w: io.Writer, text: string, n: ^int) -> io.Error {
 
 /*
 to_writer writes a complete Styled_Text (styles, colors, text, and reset) to the provided writer.
+Text content is written verbatim; callers passing untrusted input should sanitize
+with `term.strip_ansi` first.
 
 Inputs:
 - writer: The writer to output to.

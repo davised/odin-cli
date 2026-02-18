@@ -534,3 +534,78 @@ test_display_width_ansi_bare_esc :: proc(t: ^testing.T) {
 	// Bare ESC at end — zero width for the ESC byte
 	testing.expect_value(t, term.display_width("text\x1b"), 4)
 }
+
+// --- ANSI-aware truncate tests ---
+
+@(test)
+test_truncate_ansi_basic :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Red "hello" (5 visible cols) truncated to 4
+	result := term.truncate("\x1b[31mhello\x1b[0m", 4)
+	testing.expect_value(t, term.display_width(result), 4)
+	testing.expect_value(t, term.strip_ansi(result), "hel…")
+}
+
+@(test)
+test_truncate_ansi_no_truncation :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// ANSI string that fits — returns original
+	s := "\x1b[31mhi\x1b[0m"
+	testing.expect_value(t, term.truncate(s, 10), s)
+	testing.expect_value(t, term.truncate(s, 2), s)
+}
+
+@(test)
+test_truncate_ansi_multiple_segments :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// "hello world" with multiple styles, truncate to 8
+	s := "\x1b[1;31mhello\x1b[0m \x1b[32mworld\x1b[0m"
+	result := term.truncate(s, 8)
+	testing.expect_value(t, term.display_width(result), 8)
+	testing.expect_value(t, term.strip_ansi(result), "hello w…")
+}
+
+@(test)
+test_truncate_ansi_only :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Pure ANSI with no visible content — returns original
+	s := "\x1b[31m\x1b[0m"
+	testing.expect_value(t, term.truncate(s, 5), s)
+}
+
+@(test)
+test_truncate_ansi_cjk :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Red CJK "你好世" (6 visible cols) truncated to 5
+	s := "\x1b[31m你好世\x1b[0m"
+	result := term.truncate(s, 5)
+	testing.expect_value(t, term.display_width(result), 5)
+	testing.expect_value(t, term.strip_ansi(result), "你好…")
+}
+
+@(test)
+test_truncate_ansi_max_width_1 :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// max_width=1 with styled text — just ellipsis with ANSI wrapping + reset
+	result := term.truncate("\x1b[31mhello\x1b[0m", 1)
+	testing.expect_value(t, term.strip_ansi(result), "…")
+	testing.expect_value(t, term.display_width(result), 1)
+	// Verify reset is appended to prevent style bleeding
+	testing.expect(t, strings.has_suffix(result, "\x1b[0m"), "truncated ANSI should end with reset")
+}
+
+@(test)
+test_truncate_ansi_reset_appended :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Verify that truncation always appends a reset sequence
+	result := term.truncate("\x1b[1;31mhello world\x1b[0m", 6)
+	testing.expect(t, strings.has_suffix(result, "\x1b[0m"), "truncated ANSI should end with reset")
+	testing.expect_value(t, term.display_width(result), 6)
+}

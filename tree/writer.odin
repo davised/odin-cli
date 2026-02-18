@@ -118,6 +118,9 @@ write_wrapped :: proc(state: ^Render_State, content: Tree_Root, content_width: i
 
 /*
 to_writer renders a tree to an io.Writer.
+Labels are written verbatim; callers passing untrusted input should sanitize
+with `term.strip_ansi`. Depth is capped at MAX_DEPTH (64); the prefix buffer
+is limited to MAX_DEPTH * 8 bytes.
 
 Inputs:
 	w: The io.Writer to write the rendered tree to.

@@ -19,7 +19,9 @@ init_formatter :: proc() {
 	fmt.register_user_formatter(type_info_of(Table).id, table_formatter)
 }
 
-/* to_writer renders a table to an io.Writer. */
+/* to_writer renders a table to an io.Writer.
+   Cell content strings are written verbatim; callers passing untrusted input
+   should sanitize with `term.strip_ansi`. */
 to_writer :: proc(w: io.Writer, t: Table, n: ^int = nil, mode: term.Render_Mode = .Full) -> bool {
 	if len(t.columns) == 0 {
 		return true

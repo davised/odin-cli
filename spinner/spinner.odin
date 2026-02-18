@@ -89,7 +89,9 @@ make_spinner :: proc(
 	}
 }
 
-/* start hides the cursor and spawns the animation thread.
+/* start hides the cursor and spawns the animation thread. The spinner
+	 message is written verbatim to stderr; callers passing untrusted input
+	 should sanitize with `term.strip_ansi`.
 	 In Plain mode, marks running without cursor control or threads. */
 start :: proc(s: ^Spinner) {
 	if s.mode == .Plain {
@@ -113,7 +115,7 @@ start :: proc(s: ^Spinner) {
 }
 
 /* stop signals the thread to stop, joins it, clears the line, shows the cursor,
-	 and writes a final message with newline.
+	 and writes the final message verbatim to stderr with newline.
 	 In Plain mode, writes the final message without terminal control sequences. */
 stop :: proc(s: ^Spinner, final_message := "") {
 	if !s._running do return

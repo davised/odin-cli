@@ -23,6 +23,8 @@ init_formatter :: proc() {
 
 /* to_writer renders the progress bar to an io.Writer.
    Output format: Message [████░░░░] 40% (80/200) 0:12
+   The message string is written verbatim; callers passing untrusted input should
+   sanitize with `term.strip_ansi`. The fill buffer is limited to 512 bytes.
    No terminal control sequences — testable with a string builder. */
 to_writer :: proc(w: io.Writer, p: Progress, n: ^int = nil) -> bool {
 	// Message prefix

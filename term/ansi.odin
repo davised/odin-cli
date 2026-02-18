@@ -15,6 +15,8 @@ contains_ansi :: proc(s: string) -> bool {
 /*
 strip_ansi removes all ANSI escape sequences from s, returning a clean string.
 Returns the original string without allocation when no ESC bytes are present.
+Use this to sanitize untrusted input before passing to rendering procs
+(style, table, tree, etc.) which write text content verbatim.
 
 Handles CSI (e.g. `\e[31m`), OSC (e.g. `\e]0;title\a`), nF (e.g. `\e(B`),
 and Fp/Fe/Fs two-byte escape sequences.

@@ -39,6 +39,9 @@ truncate :: proc(s: string, max_width: int, allocator := context.temp_allocator)
 	// Fast path: if byte length fits and all bytes are printable ASCII, no truncation needed.
 	if len(s) <= max_width && is_printable_ascii(s) do return s
 
+	// ANSI-aware path: escape sequences are preserved verbatim with zero width.
+	if contains_ansi(s) do return truncate_ansi(s, max_width, allocator)
+
 	// Single-pass: walk graphemes tracking both budget cut point and max_width overflow.
 	// If iterator exhausts without exceeding max_width, the string fits — return as-is.
 	budget := max_width - 1 // reserve 1 column for ellipsis
@@ -232,4 +235,69 @@ first_grapheme_size :: proc(s: string) -> int {
 		return g.byte_index // start of second = end of first
 	}
 	return len(s) // only one grapheme
+}
+
+// truncate_ansi handles truncation of strings containing ANSI escape sequences.
+// ANSI sequences are copied verbatim (zero display width). A reset sequence
+// (\e[0m) is appended after the ellipsis to prevent style bleeding.
+@(private = "file")
+truncate_ansi :: proc(s: string, max_width: int, allocator := context.temp_allocator) -> string {
+	// Quick check: avoid allocation when no truncation needed.
+	if display_width_ansi(s) <= max_width do return s
+
+	RESET :: "\x1b[0m"
+	budget := max_width - 1
+	bytes := transmute([]u8)s
+	buf := make([]u8, len(s) + len(ELLIPSIS) + len(RESET), allocator)
+	out := 0
+	acc_width := 0
+	cut_out := 0
+	found_cut := false
+
+	i := 0
+	for i < len(bytes) {
+		if bytes[i] == 0x1b {
+			seq_len := skip_ansi_sequence(bytes, i)
+			copy(buf[out:], bytes[i:i + seq_len])
+			out += seq_len
+			i += seq_len
+			continue
+		}
+
+		// Find end of non-ANSI text segment
+		seg_start := i
+		for i < len(bytes) && bytes[i] != 0x1b {
+			i += 1
+		}
+		seg := s[seg_start:i]
+
+		// Copy segment bytes to output (may be partially overwritten on truncation)
+		out_seg_start := out
+		copy(buf[out:], bytes[seg_start:i])
+
+		// Walk graphemes checking display width
+		git := utf8.decode_grapheme_iterator_make(seg)
+		for _, g in utf8.decode_grapheme_iterate(&git) {
+			if acc_width + g.width > max_width {
+				if !found_cut {
+					cut_out = out_seg_start + g.byte_index
+				}
+				copy(buf[cut_out:], ELLIPSIS)
+				pos := cut_out + len(ELLIPSIS)
+				copy(buf[pos:], RESET)
+				pos += len(RESET)
+				return string(buf[:pos])
+			}
+			if !found_cut && acc_width + g.width > budget {
+				cut_out = out_seg_start + g.byte_index
+				found_cut = true
+			}
+			acc_width += g.width
+		}
+
+		out += i - seg_start
+	}
+
+	// Iterator exhausted without exceeding max_width — string fits.
+	return s
 }

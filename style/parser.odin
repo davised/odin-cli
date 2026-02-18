@@ -411,17 +411,30 @@ parse_split :: proc(input: string, allocator := context.temp_allocator) -> []str
 					when ODIN_DEBUG {log.debugf("Attempting to fix incorrect string: %s", item)}
 					fixed := strings.split_after_n(item, ")", 2, allocator)
 					append(&temp_str, fixed[0])
-					if len(lower) > 0 {
-						lower = strings.join({fixed[1], lower}, sep = " ", allocator = allocator)
-					} else {
-						lower = fixed[1]
+					append(&result, strings.concatenate(temp_str[:], allocator = allocator))
+					clear(&temp_str)
+					in_paren = false
+					// Process remainder inline instead of mutating the iterator string
+					remainder := fixed[1]
+					if len(remainder) > 0 {
+						has_open := strings.contains_rune(remainder, '(')
+						if has_open && strings.has_suffix(remainder, ")") {
+							// Self-contained token, e.g. "bg:hsl(120,1,0.5)"
+							append(&result, remainder)
+						} else if has_open {
+							// Starts a new paren group
+							append(&temp_str, remainder)
+							in_paren = true
+						} else {
+							append(&result, remainder)
+						}
 					}
 				} else {
 					append(&temp_str, item)
+					append(&result, strings.concatenate(temp_str[:], allocator = allocator))
+					clear(&temp_str)
+					in_paren = false
 				}
-				append(&result, strings.concatenate(temp_str[:], allocator = allocator))
-				clear(&temp_str)
-				in_paren = false
 			} else {
 				append(&temp_str, item)
 			}
@@ -446,10 +459,6 @@ parse_split :: proc(input: string, allocator := context.temp_allocator) -> []str
 		append(&result, strings.concatenate(temp_str[:], allocator = allocator))
 		clear(&temp_str)
 		in_paren = false
-	}
-
-	if len(input) > 0 {
-		append(&result, input)
 	}
 
 	return result[:]

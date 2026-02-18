@@ -21,6 +21,7 @@ main :: proc() {
 	append(&all_scenarios, ..tree_scenarios())
 	append(&all_scenarios, ..logger_scenarios())
 	append(&all_scenarios, ..cli_scenarios())
+	append(&all_scenarios, ..term_scenarios())
 
 	results: [dynamic]Bench_Result
 	defer delete(results)

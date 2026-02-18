@@ -26,7 +26,9 @@ init_formatter :: proc() {
 // --- Public rendering API ---
 
 /* to_writer renders a single log line for the given level and message to an
-   io.Writer. This is the zero-allocation rendering core. */
+   io.Writer. Message and field values are written verbatim; callers passing
+   untrusted input should sanitize with `term.strip_ansi`. The caller location
+   buffer is limited to 512 bytes. This is the zero-allocation rendering core. */
 to_writer :: proc(
 	w: io.Writer,
 	lgr: Logger,
