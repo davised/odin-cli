@@ -345,3 +345,192 @@ test_wrap_cjk_narrow :: proc(t: ^testing.T) {
 	_, ok3 := term.wrap_iterate(&it)
 	testing.expect(t, !ok3, "expected end")
 }
+
+// --- ANSI detection tests ---
+
+@(test)
+test_contains_ansi :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	testing.expect(t, !term.contains_ansi(""), "empty string has no ANSI")
+	testing.expect(t, !term.contains_ansi("hello"), "plain ASCII has no ANSI")
+	testing.expect(t, !term.contains_ansi("你好"), "CJK has no ANSI")
+	testing.expect(t, term.contains_ansi("\x1b[31mred\x1b[0m"), "CSI is ANSI")
+	testing.expect(t, term.contains_ansi("\x1b]0;title\x07"), "OSC is ANSI")
+	testing.expect(t, term.contains_ansi("text\x1b"), "bare ESC is ANSI")
+}
+
+// --- strip_ansi tests ---
+
+@(test)
+test_strip_ansi_no_ansi :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// No ANSI — returns original string (no allocation).
+	testing.expect_value(t, term.strip_ansi("hello"), "hello")
+	testing.expect_value(t, term.strip_ansi(""), "")
+	testing.expect_value(t, term.strip_ansi("你好世界"), "你好世界")
+}
+
+@(test)
+test_strip_ansi_csi :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Simple color codes
+	s := term.strip_ansi("\x1b[31mhello\x1b[0m")
+	testing.expect_value(t, s, "hello")
+
+	// Bold + color
+	s2 := term.strip_ansi("\x1b[1;31mbold red\x1b[0m")
+	testing.expect_value(t, s2, "bold red")
+
+	// Cursor movement (CSI H)
+	s3 := term.strip_ansi("\x1b[2J\x1b[Htext")
+	testing.expect_value(t, s3, "text")
+
+	// Multiple CSI in sequence
+	s4 := term.strip_ansi("\x1b[1m\x1b[31m\x1b[42mstyles\x1b[0m")
+	testing.expect_value(t, s4, "styles")
+}
+
+@(test)
+test_strip_ansi_osc :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// OSC with BEL terminator (set title)
+	s := term.strip_ansi("\x1b]0;my title\x07visible")
+	testing.expect_value(t, s, "visible")
+
+	// OSC with ST terminator (ESC \)
+	s2 := term.strip_ansi("\x1b]8;;https://example.com\x1b\\link\x1b]8;;\x1b\\")
+	testing.expect_value(t, s2, "link")
+}
+
+@(test)
+test_strip_ansi_fp :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Fp escape (0x30-0x3F): ESC 7 (save cursor) + ESC 8 (restore cursor)
+	s := term.strip_ansi("\x1b7text\x1b8")
+	testing.expect_value(t, s, "text")
+}
+
+@(test)
+test_strip_ansi_fe :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Fe escape (0x40-0x5F): ESC D (index) + ESC M (reverse index)
+	s := term.strip_ansi("\x1bDtext\x1bM")
+	testing.expect_value(t, s, "text")
+}
+
+@(test)
+test_strip_ansi_nf :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// nF escape: ESC ( B (select ASCII charset, 3 bytes)
+	s := term.strip_ansi("\x1b(Btext")
+	testing.expect_value(t, s, "text")
+
+	// ESC ) 0 (select DEC special graphics for G1, 3 bytes)
+	s2 := term.strip_ansi("before\x1b)0after")
+	testing.expect_value(t, s2, "beforeafter")
+}
+
+@(test)
+test_strip_ansi_bare_esc :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Bare ESC at end of string
+	s := term.strip_ansi("text\x1b")
+	testing.expect_value(t, s, "text")
+}
+
+@(test)
+test_strip_ansi_unterminated :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Unterminated CSI — everything after ESC[ consumed
+	s := term.strip_ansi("\x1b[31")
+	testing.expect_value(t, s, "")
+
+	// Unterminated OSC — everything after ESC] consumed
+	s2 := term.strip_ansi("\x1b]no terminator")
+	testing.expect_value(t, s2, "")
+}
+
+@(test)
+test_strip_ansi_mixed :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// CSI + plain + OSC + Fe
+	s := term.strip_ansi("\x1b[31mred\x1b[0m plain \x1b]0;t\x07\x1b7end\x1b8")
+	testing.expect_value(t, s, "red plain end")
+}
+
+@(test)
+test_strip_ansi_cjk :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	s := term.strip_ansi("\x1b[31m你好\x1b[0m世界")
+	testing.expect_value(t, s, "你好世界")
+}
+
+// --- ANSI-aware display_width tests ---
+
+@(test)
+test_display_width_ansi_simple :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Red "hello" — 5 visible columns
+	testing.expect_value(t, term.display_width("\x1b[31mhello\x1b[0m"), 5)
+	// Bold + color
+	testing.expect_value(t, term.display_width("\x1b[1;31mbold\x1b[0m"), 4)
+	// Bare text with reset at end
+	testing.expect_value(t, term.display_width("text\x1b[0m"), 4)
+}
+
+@(test)
+test_display_width_ansi_multiple :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Multiple styled segments: "hello" + " " + "world" = 11
+	s := "\x1b[1;31mhello\x1b[0m \x1b[32mworld\x1b[0m"
+	testing.expect_value(t, term.display_width(s), 11)
+}
+
+@(test)
+test_display_width_ansi_cjk :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Red CJK — 4 visible columns
+	testing.expect_value(t, term.display_width("\x1b[31m你好\x1b[0m"), 4)
+	// Mixed: ASCII + ANSI + CJK
+	testing.expect_value(t, term.display_width("hi\x1b[31m你好\x1b[0m"), 6)
+}
+
+@(test)
+test_display_width_ansi_osc :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// OSC hyperlink around "click" — 5 visible columns
+	s := "\x1b]8;;https://example.com\x07click\x1b]8;;\x07"
+	testing.expect_value(t, term.display_width(s), 5)
+}
+
+@(test)
+test_display_width_ansi_only :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Pure ANSI with no visible content
+	testing.expect_value(t, term.display_width("\x1b[31m\x1b[0m"), 0)
+	testing.expect_value(t, term.display_width("\x1b[2J\x1b[H"), 0)
+}
+
+@(test)
+test_display_width_ansi_bare_esc :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Bare ESC at end — zero width for the ESC byte
+	testing.expect_value(t, term.display_width("text\x1b"), 4)
+}

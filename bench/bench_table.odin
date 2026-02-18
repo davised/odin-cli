@@ -2,12 +2,14 @@ package bench
 
 import "../style"
 import "../table"
+import "base:runtime"
 import "core:fmt"
 
 Table_Bench_Data :: struct {
 	small:  table.Table,
 	medium: table.Table,
 	large:  table.Table,
+	arena:  runtime.Arena,
 }
 
 table_scenarios :: proc() -> []Bench_Scenario {
@@ -40,6 +42,7 @@ table_scenarios :: proc() -> []Bench_Scenario {
 @(private = "file")
 table_setup :: proc() -> rawptr {
 	data := new(Table_Bench_Data)
+	alloc := runtime.arena_allocator(&data.arena)
 
 	// Small: 3 cols, 5 rows
 	data.small = table.make_table(border = table.BORDER_LIGHT)
@@ -47,7 +50,7 @@ table_setup :: proc() -> rawptr {
 	table.add_column(&data.small, header = "Value")
 	table.add_column(&data.small, header = "Status")
 	for i in 0 ..< 5 {
-		table.add_row(&data.small, fmt.aprintf("Item %d", i), fmt.aprintf("%d", i * 42), "OK")
+		table.add_row(&data.small, fmt.aprintf("Item %d", i, allocator = alloc), fmt.aprintf("%d", i * 42, allocator = alloc), "OK")
 	}
 
 	// Medium: 5 cols, 50 rows, styled header, mixed alignment
@@ -61,11 +64,11 @@ table_setup :: proc() -> rawptr {
 	for i in 0 ..< 50 {
 		table.add_row(
 			&data.medium,
-			fmt.aprintf("%d", i + 1),
-			fmt.aprintf("Entry %d", i),
-			fmt.aprintf("Cat-%c", rune('A' + i % 5)),
-			fmt.aprintf("%.1f", f64(i * 17 % 100)),
-			fmt.aprintf("Description for entry number %d", i),
+			fmt.aprintf("%d", i + 1, allocator = alloc),
+			fmt.aprintf("Entry %d", i, allocator = alloc),
+			fmt.aprintf("Cat-%c", rune('A' + i % 5), allocator = alloc),
+			fmt.aprintf("%.1f", f64(i * 17 % 100), allocator = alloc),
+			fmt.aprintf("Description for entry number %d", i, allocator = alloc),
 		)
 	}
 
@@ -73,21 +76,21 @@ table_setup :: proc() -> rawptr {
 	data.large = table.make_table(border = table.BORDER_LIGHT)
 	data.large.width = 120
 	for c in 0 ..< 10 {
-		table.add_column(&data.large, header = fmt.aprintf("Col %d", c))
+		table.add_column(&data.large, header = fmt.aprintf("Col %d", c, allocator = alloc))
 	}
 	for r in 0 ..< 500 {
 		table.add_row(
 			&data.large,
-			fmt.aprintf("R%d", r),
-			fmt.aprintf("data-%d", r),
-			fmt.aprintf("%d", r * 7),
-			fmt.aprintf("val%d", r % 20),
+			fmt.aprintf("R%d", r, allocator = alloc),
+			fmt.aprintf("data-%d", r, allocator = alloc),
+			fmt.aprintf("%d", r * 7, allocator = alloc),
+			fmt.aprintf("val%d", r % 20, allocator = alloc),
 			"text",
-			fmt.aprintf("%d%%", r % 100),
+			fmt.aprintf("%d%%", r % 100, allocator = alloc),
 			"info",
-			fmt.aprintf("x%d", r),
+			fmt.aprintf("x%d", r, allocator = alloc),
 			"more",
-			fmt.aprintf("end-%d", r),
+			fmt.aprintf("end-%d", r, allocator = alloc),
 		)
 	}
 
@@ -100,6 +103,7 @@ table_teardown :: proc(user_data: rawptr) {
 	table.destroy_table(&data.small)
 	table.destroy_table(&data.medium)
 	table.destroy_table(&data.large)
+	runtime.arena_destroy(&data.arena)
 	free(data)
 }
 

@@ -196,7 +196,7 @@ write_border_line :: proc(
 
 		if col_idx < len(widths) - 1 {
 			if t.hide_column_separator {
-				if !write_repeated(w, chars.horizontal, 1, n) do return false
+				if !write_str(w, chars.horizontal, n) do return false
 			} else {
 				tee := chars.top_tee
 				switch pos {

@@ -153,10 +153,10 @@ to_writer :: proc(
 
 		// Write prefix + text + reset as 3 writes max.
 		if pos > 0 {
-			if !_write_str(writer, string(buf[:pos]), n) do return false
+			if !write_str(writer, string(buf[:pos]), n) do return false
 		}
-		if !_write_str(writer, styled_text.text, n) do return false
-		if !_write_str(writer, "\x1b[0m", n) do return false
+		if !write_str(writer, styled_text.text, n) do return false
+		if !write_str(writer, "\x1b[0m", n) do return false
 	} else {
 		_, err := io.write_string(writer, styled_text.text, n)
 		if err != .None do return false
@@ -234,7 +234,7 @@ write_uint_to_buf :: proc(buf: []u8, val: uint) -> int {
 		return 1
 	}
 	// Write digits in reverse, then reverse in place.
-	digits: [10]u8
+	digits: [20]u8
 	count := 0
 	v := val
 	for v > 0 {
@@ -249,7 +249,7 @@ write_uint_to_buf :: proc(buf: []u8, val: uint) -> int {
 }
 
 @(private = "file")
-_write_str :: proc(w: io.Writer, s: string, n: ^int) -> bool {
+write_str :: proc(w: io.Writer, s: string, n: ^int) -> bool {
 	_, err := io.write_string(w, s, n)
 	return err == .None
 }

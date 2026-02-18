@@ -6,7 +6,7 @@ ELLIPSIS :: "…"
 
 // is_printable_ascii returns true if every byte in s is printable ASCII
 // (0x20..0x7E). Control characters and multi-byte UTF-8 return false.
-@(private = "file")
+@(private)
 is_printable_ascii :: proc(s: string) -> bool {
 	for b in transmute([]u8)s {
 		if b < 0x20 || b >= 0x7F do return false
@@ -16,11 +16,16 @@ is_printable_ascii :: proc(s: string) -> bool {
 
 /* display_width returns the monospace terminal cell width of a string.
 	 Handles CJK/fullwidth (2 cols), combining marks (0 cols), emoji, etc.
+	 ANSI escape sequences (CSI, OSC, Fe) contribute zero width.
 	 Uses a fast path for printable ASCII strings where len == display width. */
 display_width :: proc(s: string) -> int {
-	if is_printable_ascii(s) {
-		return len(s)
+	// Single pass: detect ESC and non-ASCII in one scan.
+	has_non_ascii := false
+	for b in transmute([]u8)s {
+		if b == 0x1b do return display_width_ansi(s)
+		if b < 0x20 || b >= 0x7F do has_non_ascii = true
 	}
+	if !has_non_ascii do return len(s)
 	_, _, w := utf8.grapheme_count(s)
 	return w
 }

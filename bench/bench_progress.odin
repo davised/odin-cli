@@ -1,7 +1,6 @@
 package bench
 
 import "../progress"
-import "core:time"
 
 Progress_Bench_Data :: struct {
 	simple: progress.Progress,
@@ -51,8 +50,6 @@ progress_setup :: proc() -> rawptr {
 		show_count      = true,
 		show_elapsed    = true,
 		mode            = .Plain,
-		_start_tick     = time.tick_now(),
-		_started        = true,
 	}
 
 	return data
@@ -72,5 +69,6 @@ bench_progress_simple :: proc(state: ^Bench_State) {
 @(private = "file")
 bench_progress_full :: proc(state: ^Bench_State) {
 	data := (^Progress_Bench_Data)(state.user_data)
+	progress.start(&data.full) // reset tick each iteration for consistent elapsed output
 	progress.to_writer(state.writer, data.full)
 }
