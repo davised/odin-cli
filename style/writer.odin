@@ -131,6 +131,7 @@ to_writer :: proc(
 	styled_text: Styled_Text,
 	n: ^int = nil,
 	mode: term.Render_Mode = .Full,
+	depth: Maybe(term.Color_Depth) = nil,
 ) -> bool {
 	if mode == .Plain {
 		_, err := io.write_string(writer, styled_text.text, n)
@@ -143,7 +144,7 @@ to_writer :: proc(
 
 	if needs_ansi {
 		// Build ANSI prefix into stack buffer, write once.
-		// Worst case: text styles (18B) + RGB fg (19B) + RGB bg (19B) = 56B; 96B is safe.
+		// Worst case: text styles (~30B for 13 styles) + RGB fg (19B) + RGB bg (19B) = 68B; 96B is safe.
 		buf: [96]u8
 		pos := 0
 
@@ -151,16 +152,24 @@ to_writer :: proc(
 			pos += write_text_styles_to_buf(buf[pos:], styled_text.style.text_styles)
 		}
 		if mode == .Full {
-			pos += write_color_to_buf(buf[pos:], styled_text.style.foreground_color, false)
-			pos += write_color_to_buf(buf[pos:], styled_text.style.background_color, true)
+			// Degrade colors to match terminal capabilities.
+			actual_depth := depth.? or_else term.detect_color_depth()
+			fg := degrade_color(styled_text.style.foreground_color, actual_depth)
+			bg := degrade_color(styled_text.style.background_color, actual_depth)
+			pos += write_color_to_buf(buf[pos:], fg, false)
+			pos += write_color_to_buf(buf[pos:], bg, true)
 		}
 
-		// Write prefix + text + reset as 3 writes max.
 		if pos > 0 {
+			// Write prefix + text + reset as 3 writes.
 			if !write_str(writer, string(buf[:pos]), n) do return false
+			if !write_str(writer, styled_text.text, n) do return false
+			if !write_str(writer, "\x1b[0m", n) do return false
+		} else {
+			// Colors degraded to nil and no text styles — plain text only.
+			_, err := io.write_string(writer, styled_text.text, n)
+			if err != .None do return false
 		}
-		if !write_str(writer, styled_text.text, n) do return false
-		if !write_str(writer, "\x1b[0m", n) do return false
 	} else {
 		_, err := io.write_string(writer, styled_text.text, n)
 		if err != .None do return false
@@ -274,6 +283,7 @@ Returns:
 to_str :: proc(
 	styled_text: Styled_Text,
 	mode: term.Render_Mode = .Full,
+	depth: Maybe(term.Color_Depth) = nil,
 	allocator := context.allocator,
 ) -> (string, bool) #optional_ok {
 	if styled_text.text == "" {
@@ -281,7 +291,7 @@ to_str :: proc(
 	}
 
 	sb := strings.builder_make(allocator = allocator)
-	ok := to_writer(strings.to_writer(&sb), styled_text, mode = mode)
+	ok := to_writer(strings.to_writer(&sb), styled_text, mode = mode, depth = depth)
 	return strings.to_string(sb), ok
 }
 

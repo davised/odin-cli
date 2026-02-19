@@ -282,6 +282,12 @@ parse_color :: proc(color_str: string) -> (Colors, bool) {
 		return result, ok
 	}
 
+	// Try as CSS/X11 named color
+	if result, ok := css_color(color_str); ok {
+		when ODIN_DEBUG {log.debugf("Matched CSS named color: '%s'", color_str)}
+		return result, true
+	}
+
 	// Try as hex color
 	if strings.has_prefix(color_str, "#") || len(color_str) == 6 {
 		if result, ok := hex_to_rgb(color_str); ok {

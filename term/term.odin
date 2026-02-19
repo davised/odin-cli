@@ -11,6 +11,15 @@ Render_Mode :: enum {
 	Full,     // Everything: colors + text styles + terminal control.
 }
 
+// Color_Depth mirrors core:terminal.Color_Depth — the level of color support
+// reported by the terminal at program startup.
+Color_Depth :: terminal.Color_Depth
+
+// detect_color_depth returns the terminal's color depth as detected at init time.
+detect_color_depth :: proc() -> Color_Depth {
+	return terminal.color_depth
+}
+
 /* terminal_width returns the current terminal width in columns.
 	 Returns (0, false) if stdout is not a terminal. */
 terminal_width :: proc() -> (int, bool) {
