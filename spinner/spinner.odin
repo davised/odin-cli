@@ -100,6 +100,7 @@ start :: proc(s: ^Spinner) {
 	}
 
 	w := os.stream_from_handle(os.stderr)
+	term.notify_cursor_hidden()
 	io.write_string(w, ansi.CSI + ansi.DECTCEM_HIDE)
 
 	sync.atomic_store_explicit(&s._stop, false, .Release)
@@ -149,6 +150,7 @@ stop :: proc(s: ^Spinner, final_message := "") {
 	}
 
 	io.write_string(w, ansi.CSI + ansi.DECTCEM_SHOW)
+	term.notify_cursor_visible()
 	io.write_string(w, "\n")
 }
 

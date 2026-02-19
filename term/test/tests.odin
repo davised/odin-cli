@@ -5,6 +5,45 @@ import "core:strings"
 import "core:testing"
 import "core:time"
 
+// --- Signal cleanup state tests ---
+
+@(test)
+test_signal_should_exit_default :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	testing.expect(t, !term.should_exit(), "should_exit should default to false")
+}
+
+@(test)
+test_signal_notify_without_install :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Safe to call even if install_cleanup_handler was not called.
+	term.notify_cursor_hidden()
+	term.notify_cursor_visible()
+}
+
+@(test)
+test_signal_notify_toggle :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	term.notify_cursor_hidden()
+	term.notify_cursor_visible()
+	// No crash — state toggling works.
+}
+
+@(test)
+test_signal_double_install :: proc(t: ^testing.T) {
+	testing.set_fail_timeout(t, 5 * time.Second)
+
+	// Calling twice should not panic — second call is a no-op.
+	// NOTE: permanently installs signal handlers for the test process.
+	term.install_cleanup_handler()
+	term.install_cleanup_handler()
+}
+
+// --- Display width tests ---
+
 @(test)
 test_display_width_ascii :: proc(t: ^testing.T) {
 	testing.set_fail_timeout(t, 5 * time.Second)
