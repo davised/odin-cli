@@ -12,6 +12,13 @@ Text_Style :: enum {
 	Invert,
 	Hide,
 	Strike,
+	// 10-20: font selection (rarely supported)
+	Double_Underline = 21,
+	// 22-29: disable codes (not needed — we reset with \e[0m)
+	// 50: proportional spacing (not useful)
+	Framed    = 51,
+	Encircled = 52,
+	Overlined = 53,
 }
 
 // Text_Style_Set is a bit set of text style attributes that can be combined.
@@ -182,6 +189,14 @@ invert :: proc(str: union {string, Styled_Text}) -> Styled_Text { return apply_t
 hide :: proc(str: union {string, Styled_Text}) -> Styled_Text { return apply_text_style(str, .Hide) }
 // strike applies the strikethrough text style.
 strike :: proc(str: union {string, Styled_Text}) -> Styled_Text { return apply_text_style(str, .Strike) }
+// double_underline applies the double underline text style.
+double_underline :: proc(str: union {string, Styled_Text}) -> Styled_Text { return apply_text_style(str, .Double_Underline) }
+// framed applies the framed text style.
+framed :: proc(str: union {string, Styled_Text}) -> Styled_Text { return apply_text_style(str, .Framed) }
+// encircled applies the encircled text style.
+encircled :: proc(str: union {string, Styled_Text}) -> Styled_Text { return apply_text_style(str, .Encircled) }
+// overlined applies the overline text style.
+overlined :: proc(str: union {string, Styled_Text}) -> Styled_Text { return apply_text_style(str, .Overlined) }
 
 // Semantic convenience functions — these override the entire style (intentional).
 

@@ -64,15 +64,20 @@ color_map := map[string]ANSI_Color {
 
 // style_map maps lowercase style names to their Text_Style values.
 style_map := map[string]Text_Style {
-	"bold"        = .Bold,
-	"faint"       = .Faint,
-	"italic"      = .Italic,
-	"underline"   = .Underline,
-	"blink_slow"  = .Blink_Slow,
-	"blink_rapid" = .Blink_Rapid,
-	"invert"      = .Invert,
-	"hide"        = .Hide,
-	"strike"      = .Strike,
+	"bold"              = .Bold,
+	"faint"             = .Faint,
+	"italic"            = .Italic,
+	"underline"         = .Underline,
+	"blink_slow"        = .Blink_Slow,
+	"blink_rapid"       = .Blink_Rapid,
+	"invert"            = .Invert,
+	"hide"              = .Hide,
+	"strike"            = .Strike,
+	"double_underline"  = .Double_Underline,
+	"framed"            = .Framed,
+	"encircled"         = .Encircled,
+	"overlined"         = .Overlined,
+	"overline"          = .Overlined,
 }
 
 /*
