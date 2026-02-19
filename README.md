@@ -1,6 +1,6 @@
 # odin-cli
 
-A terminal toolkit for Odin — styled text, tables, logging, spinners, progress bars, trees, and CLI framework, all with zero-allocation design and seamless `fmt` integration.
+A terminal toolkit for Odin — styled text, tables, logging, spinners, progress bars, trees, panels, and CLI framework, all with zero-allocation design and seamless `fmt` integration.
 
 Inspired by [Rich](https://github.com/Textualize/rich) for Python.
 
@@ -14,10 +14,21 @@ Inspired by [Rich](https://github.com/Textualize/rich) for Python.
 | [`spinner`](spinner/) | Animated terminal spinners with threaded animation |
 | [`progress`](progress/) | Progress bars with customizable styles and elapsed time |
 | [`tree`](tree/) | Hierarchical tree rendering with Unicode branch characters |
+| [`panel`](panel/) | Bordered text panels with title, padding, and auto/fixed width |
 | [`cli`](cli/) | CLI framework with rich help output, validation, and shell completions |
 | [`term`](term/) | Terminal capability detection (width, color, render mode) |
 
 Each package can be imported independently — use only what you need.
+
+## Compatibility
+
+odin-cli versions track Odin releases directly. The version format is `dev-YYYY-MM.minor.patch`, where `dev-YYYY-MM` matches the Odin version and `minor.patch` tracks odin-cli releases:
+
+| odin-cli version | Odin version | Branch |
+|------------------|--------------|--------|
+| `dev-2026-02.x.x` | `dev-2026-02` or later | `release/dev-2026-02` |
+
+Pick the release branch or tag that matches your Odin version. See [Releases](https://github.com/davised/odin-cli/releases) for the latest.
 
 ## Installation
 
@@ -26,7 +37,7 @@ Each package can be imported independently — use only what you need.
 Copies the source directly into your project — no special steps for collaborators who clone your repo:
 
 ```bash
-git subtree add --prefix deps/odin-cli https://github.com/davised/odin-cli.git main --squash
+git subtree add --prefix deps/odin-cli https://github.com/davised/odin-cli.git dev-2026-02.0.0 --squash
 ```
 
 Then import the packages you need:
@@ -37,18 +48,20 @@ import "deps/odin-cli/table"
 import "deps/odin-cli/logger"
 ```
 
-To update:
+To update to a newer release:
 
 ```bash
-git subtree pull --prefix deps/odin-cli https://github.com/davised/odin-cli.git main --squash
+git subtree pull --prefix deps/odin-cli https://github.com/davised/odin-cli.git dev-2026-02.1.0 --squash
 ```
 
 ### As a git submodule
 
-Keeps a lightweight reference instead of copying the source:
+Keeps a lightweight reference instead of copying the source. Best when you want to pin to a specific version and update deliberately:
 
 ```bash
-git submodule add https://github.com/davised/odin-cli.git deps/odin-cli
+git submodule add -b release/dev-2026-02 https://github.com/davised/odin-cli.git deps/odin-cli
+cd deps/odin-cli && git checkout dev-2026-02.0.0 && cd ../..
+git add deps/odin-cli
 ```
 
 Collaborators cloning your project need an extra step:
@@ -59,10 +72,11 @@ git clone --recurse-submodules https://github.com/yourname/yourproject.git
 git submodule update --init
 ```
 
-To update:
+To update to a newer release:
 
 ```bash
-git submodule update --remote deps/odin-cli
+cd deps/odin-cli && git fetch && git checkout dev-2026-02.1.0 && cd ../..
+git add deps/odin-cli && git commit -m "Update odin-cli to dev-2026-02.1.0"
 ```
 
 ### Into the Odin shared collection
@@ -71,7 +85,7 @@ For system-wide availability across all your projects:
 
 ```bash
 cd /path/to/Odin/shared
-git clone https://github.com/davised/odin-cli.git odin-cli
+git clone -b release/dev-2026-02 https://github.com/davised/odin-cli.git odin-cli
 ```
 
 Then import with:
@@ -80,6 +94,8 @@ Then import with:
 import "shared:odin-cli/style"
 import "shared:odin-cli/table"
 ```
+
+Note: your build command or `ols.json` must know where the shared collection lives. If you haven't configured one, pass it to the compiler: `odin build . -collection:shared=/path/to/Odin/shared`.
 
 ## Design Philosophy
 
@@ -259,6 +275,27 @@ fmt.println(t)
 
 Predefined enumerators: `DEFAULT_ENUMERATOR` (`├──`/`└──`), `ROUNDED_ENUMERATOR` (`├──`/`╰──`), `ASCII_ENUMERATOR` (`|--`/`\--`). Supports recursive nesting, per-subtree enumerator override, and forest mode (nil root).
 
+### panel
+
+Bordered text panels with title, configurable padding, and auto or fixed width.
+
+```odin
+p := panel.Panel{
+    lines = {
+        style.bold("odin-cli"),
+        "A terminal toolkit for Odin.",
+        style.faint("Zero allocation. Works with fmt."),
+    },
+    border  = panel.BORDER_ROUNDED,
+    title   = style.bold("About"),
+    padding = 1,
+}
+
+fmt.println(p)
+```
+
+Predefined borders: `BORDER_ROUNDED`, `BORDER_LIGHT`, `BORDER_HEAVY`, `BORDER_DOUBLE`, `BORDER_ASCII`, `BORDER_NONE`. Supports styled titles, auto-sizing to content width, and fixed-width mode with truncation.
+
 ### cli
 
 Rich CLI framework wrapping `core:flags` with beautiful help output, input validation, multi-command apps, and shell completions.
@@ -318,6 +355,18 @@ mode := term.detect_render_mode(os.stderr)
 ```
 
 Respects `NO_COLOR`, `FORCE_COLOR`, and `CLICOLOR_FORCE` environment variables.
+
+## See Also
+
+Odin has a growing ecosystem of terminal libraries at different levels of abstraction:
+
+- [**afmt**](https://github.com/OnlyXuul/afmt) — ANSI printing library that mirrors `core:fmt` with color and attribute format strings. If you just want colored `println` without the rest of the toolkit, afmt is a clean, focused choice.
+- [**TermCL**](https://github.com/RaphGL/TermCL) — Terminal control library for building TUIs. Provides cursor control, input handling, raw mode, and even an SDL3 rendering backend. Different scope — where odin-cli formats output, TermCL controls the terminal.
+- [**karvi**](https://github.com/greenm01/karvi) — ANSI terminal support library with screen management, cursor control, and event handling. Similar scope to TermCL.
+- [**odin-color**](https://github.com/hrszpuk/odin-color) — Simple ANSI color package inspired by Rust's `colored` crate.
+- Odin's built-in [`core:terminal`](https://pkg.odin-lang.org/core/terminal/) and [`core:terminal/ansi`](https://pkg.odin-lang.org/core/terminal/ansi/) packages provide raw ANSI constants and terminal detection that many of these libraries (including odin-cli) build on.
+
+odin-cli focuses on **output formatting** — styled text, tables, trees, panels, logging, progress indicators, and CLI framework — rather than terminal control. If you need both, odin-cli pairs well with a TUI library like TermCL or karvi.
 
 ## Acknowledgments
 

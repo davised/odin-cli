@@ -1,12 +1,14 @@
 # Build artifacts
 *.bin
 *.bin.dSYM/
-examples/cli_demo/cli_demo
-examples/hqsub_demo/hqsub
-examples/tutorial_01_basic/tutorial_01_basic
-examples/tutorial_02_validation/tutorial_02_validation
-examples/tutorial_03_commands/tutorial_03_commands
-examples/tutorial_04_advanced/tutorial_04_advanced
+
+# Example binaries (Odin produces extensionless executables)
+examples/*/*
+!examples/*/*.odin
+
+# Root-level build outputs (from running odin build examples/foo/ in project root)
+/showcase
+/live_demo
 
 # OS
 .DS_Store
