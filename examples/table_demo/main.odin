@@ -24,9 +24,9 @@ main :: proc() {
 		tbl.width = width
 
 		table.add_column(&tbl, style.bold("Name"))
-		table.add_column(&tbl, style.bold("Role"), alignment = .CENTER)
-		table.add_column(&tbl, style.bold("Status"), alignment = .CENTER)
-		table.add_column(&tbl, style.bold("Email"), alignment = .RIGHT)
+		table.add_column(&tbl, style.bold("Role"), alignment = .Center)
+		table.add_column(&tbl, style.bold("Status"), alignment = .Center)
+		table.add_column(&tbl, style.bold("Email"), alignment = .Right)
 
 		table.add_row(&tbl, "Alice Johnson", "Engineering Lead", style.green("Active"), "alice@example.com")
 		table.add_row(&tbl, "Bob Smith", "Designer", style.yellow("Away"), "bob@example.com")
@@ -48,9 +48,9 @@ main :: proc() {
 		tbl.width = half
 
 		table.add_column(&tbl, style.bold("Name"))
-		table.add_column(&tbl, style.bold("Role"), alignment = .CENTER)
-		table.add_column(&tbl, style.bold("Status"), alignment = .CENTER)
-		table.add_column(&tbl, style.bold("Email"), alignment = .RIGHT)
+		table.add_column(&tbl, style.bold("Role"), alignment = .Center)
+		table.add_column(&tbl, style.bold("Status"), alignment = .Center)
+		table.add_column(&tbl, style.bold("Email"), alignment = .Right)
 
 		table.add_row(&tbl, "Alice Johnson", "Engineering Lead", style.green("Active"), "alice@example.com")
 		table.add_row(&tbl, "Bob Smith", "Designer", style.yellow("Away"), "bob@example.com")
@@ -69,9 +69,9 @@ main :: proc() {
 		defer table.destroy_table(&tbl)
 
 		table.add_column(&tbl, style.bold("Name"))
-		table.add_column(&tbl, style.bold("Role"), alignment = .CENTER)
-		table.add_column(&tbl, style.bold("Status"), alignment = .CENTER)
-		table.add_column(&tbl, style.bold("Email"), alignment = .RIGHT)
+		table.add_column(&tbl, style.bold("Role"), alignment = .Center)
+		table.add_column(&tbl, style.bold("Status"), alignment = .Center)
+		table.add_column(&tbl, style.bold("Email"), alignment = .Right)
 
 		table.add_row(&tbl, "Alice Johnson", "Engineering Lead", style.green("Active"), "alice@example.com")
 		table.add_row(&tbl, "Bob Smith", "Designer", style.yellow("Away"), "bob@example.com")

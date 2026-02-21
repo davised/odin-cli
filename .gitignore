@@ -1,6 +1,6 @@
 # Build artifacts
 *.bin
-*.bin.dSYM/
+*.dSYM/
 
 # Example binaries (Odin produces extensionless executables)
 examples/*/*
@@ -19,4 +19,6 @@ examples/*/*
 # Editor / tools
 .aider*
 .env
+ols.json
+odinfmt.json
 ROADMAP.md

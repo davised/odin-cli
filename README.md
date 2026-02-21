@@ -184,7 +184,7 @@ tbl := table.make_table(border = table.BORDER_ROUNDED)
 defer table.destroy_table(&tbl)
 
 table.add_column(&tbl, style.bold("Name"))
-table.add_column(&tbl, style.bold("Status"), alignment = .CENTER)
+table.add_column(&tbl, style.bold("Status"), alignment = .Center)
 
 table.add_row(&tbl, "Alice", style.green("Active"))
 table.add_row(&tbl, "Bob",   style.yellow("Away"))
@@ -356,6 +356,17 @@ mode := term.detect_render_mode(os.stderr)
 
 Respects `NO_COLOR`, `FORCE_COLOR`, and `CLICOLOR_FORCE` environment variables.
 
+## Development
+
+```bash
+make test       # Run all 306 tests across 9 packages
+make examples   # Build all examples
+make bench      # Build and run benchmarks
+make clean      # Remove build artifacts
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full development setup, code conventions, and PR guidelines.
+
 ## See Also
 
 Odin has a growing ecosystem of terminal libraries at different levels of abstraction:
@@ -378,7 +389,7 @@ The majority of this project was written with [Claude Code](https://claude.ai/cl
 
 ## Contributing
 
-Issues and PRs are welcome. The codebase follows Odin core library conventions — `snake_case` for procedures and variables, `Pascal_Case` for types, `/* */` block comments for documentation. The [`examples/`](examples/) directory is a good place to start exploring.
+Issues and PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code conventions, and how to run tests.
 
 ## License
 
