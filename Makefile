@@ -1,4 +1,4 @@
-.PHONY: test bench examples clean help version
+.PHONY: test bench examples clean help version release-notes release
 
 VERSION := $(shell cat VERSION)
 GIT_SHA := $(shell git rev-parse --short HEAD)
@@ -20,6 +20,19 @@ help:
 ## version: Show version and git SHA
 version:
 	@echo "$(VERSION)+$(GIT_SHA)"
+
+## release-notes: Extract release notes for current VERSION from CHANGELOG
+release-notes:
+	@awk '/^## \[$(VERSION)\]/{found=1; next} /^## \[/{if(found) exit} found' CHANGELOG.md
+
+## release: Tag and create GitHub release for current VERSION
+release:
+	@if git rev-parse "$(VERSION)" >/dev/null 2>&1; then \
+		echo "Error: tag $(VERSION) already exists"; exit 1; \
+	fi
+	git tag -a "$(VERSION)" -m "Release $(VERSION)"
+	git push origin "$(VERSION)"
+	$(MAKE) release-notes | gh release create "$(VERSION)" --title "$(VERSION)" --notes-file -
 
 ## test: Run all package tests
 test:
