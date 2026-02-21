@@ -6,21 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use `de
 
 ## [Unreleased]
 
-### Added
-
-- **term**: Signal cleanup handler that automatically restores cursor visibility on Ctrl+C, Ctrl+Z, crashes, and termination signals. `install_cleanup_handler` + `should_exit` for graceful shutdown polling. POSIX suspend/resume (SIGTSTP/SIGCONT) re-hides cursor on `fg`.
-- **panel**: Add to README package table and documentation section.
-- **repo**: Add compatibility section documenting versioning scheme (`dev-YYYY-MM.minor.patch`).
-- **repo**: Update installation instructions to reference tags and release branches.
-- **repo**: Add CHANGELOG.md.
-
-### Changed
-
-- **repo**: Simplify .gitignore with pattern-based example binary ignoring.
-
-## [dev-2026-02.0.0] - 2026-02-19
-
-Initial release targeting Odin `dev-2026-02`.
+Initial development targeting Odin `dev-2026-02`.
 
 ### Added
 
@@ -43,9 +29,10 @@ Initial release targeting Odin `dev-2026-02`.
 - **term**: Terminal capability detection — width, color depth (3/4/8/24-bit), render mode (Full/No\_Color/Plain).
 - **term**: ANSI-aware display width calculation, `strip_ansi`, and `truncate` that preserves ANSI sequences.
 - **term**: Respects `NO_COLOR`, `FORCE_COLOR`, and `CLICOLOR_FORCE` environment variables.
+- **term**: Signal cleanup handler that automatically restores cursor visibility on Ctrl+C, Ctrl+Z, crashes, and termination signals. `install_cleanup_handler` + `should_exit` for graceful shutdown polling. POSIX suspend/resume (SIGTSTP/SIGCONT) re-hides cursor on `fg`.
 - **panel**: Bordered text panels with optional styled title, configurable padding, auto-sizing to content width, and fixed-width mode with truncation.
 - **panel**: Six predefined border styles matching table borders.
 - **repo**: Comprehensive README, examples for every package, CLI tutorial.
-
-[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.0.0...HEAD
-[dev-2026-02.0.0]: https://github.com/davised/odin-cli/releases/tag/dev-2026-02.0.0
+- **repo**: Add compatibility section documenting versioning scheme (`dev-YYYY-MM.minor.patch`).
+- **repo**: Add CONTRIBUTING.md, Makefile, and developer documentation.
+- **repo**: Add CHANGELOG.md.

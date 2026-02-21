@@ -26,9 +26,11 @@ odin-cli versions track Odin releases directly. The version format is `dev-YYYY-
 
 | odin-cli version | Odin version | Branch |
 |------------------|--------------|--------|
-| `dev-2026-02.x.x` | `dev-2026-02` or later | `release/dev-2026-02` |
+| `dev-2026-02.x.x` | `dev-2026-02` or later | `main` |
 
-Pick the release branch or tag that matches your Odin version. See [Releases](https://github.com/davised/odin-cli/releases) for the latest.
+Tags are made on `main` for the current Odin version. When a new Odin version is released, the previous version gets a `release/dev-YYYY-MM` maintenance branch and `main` moves forward. Bug fixes go to `main` first, then get cherry-picked to maintained release branches as needed.
+
+Pick the tag that matches your Odin version. See [Releases](https://github.com/davised/odin-cli/releases) for the latest.
 
 ## Installation
 
@@ -59,7 +61,7 @@ git subtree pull --prefix deps/odin-cli https://github.com/davised/odin-cli.git 
 Keeps a lightweight reference instead of copying the source. Best when you want to pin to a specific version and update deliberately:
 
 ```bash
-git submodule add -b release/dev-2026-02 https://github.com/davised/odin-cli.git deps/odin-cli
+git submodule add -b main https://github.com/davised/odin-cli.git deps/odin-cli
 cd deps/odin-cli && git checkout dev-2026-02.0.0 && cd ../..
 git add deps/odin-cli
 ```
@@ -85,7 +87,7 @@ For system-wide availability across all your projects:
 
 ```bash
 cd /path/to/Odin/shared
-git clone -b release/dev-2026-02 https://github.com/davised/odin-cli.git odin-cli
+git clone -b main https://github.com/davised/odin-cli.git odin-cli
 ```
 
 Then import with:

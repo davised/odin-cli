@@ -1,4 +1,8 @@
-.PHONY: test bench examples clean help
+.PHONY: test bench examples clean help version
+
+VERSION := $(shell cat VERSION)
+GIT_SHA := $(shell git rev-parse --short HEAD)
+DEFINES := -define:VERSION=$(VERSION) -define:GIT_SHA=$(GIT_SHA)
 
 PACKAGES := style table tree logger panel progress spinner term cli
 
@@ -13,7 +17,11 @@ help:
 	@echo ""
 	@sed -n 's/^## //p' $(MAKEFILE_LIST) | column -t -s ':'
 
-## test: Run all package tests (306 tests across 9 packages)
+## version: Show version and git SHA
+version:
+	@echo "$(VERSION)+$(GIT_SHA)"
+
+## test: Run all package tests
 test:
 	@fail=0; \
 	for pkg in $(PACKAGES); do \
@@ -24,14 +32,14 @@ test:
 
 ## bench: Build and run benchmarks
 bench:
-	odin build bench -out:bench.bin -o:speed && ./bench.bin
+	odin build bench -out:bench.bin -o:speed $(DEFINES) && ./bench.bin
 
 ## examples: Build all examples
 examples:
 	@fail=0; \
 	for ex in $(EXAMPLES); do \
 		echo "=== $$ex ==="; \
-		odin build examples/$$ex -out:examples/$$ex/$$ex || fail=1; \
+		odin build examples/$$ex -out:examples/$$ex/$$ex $(DEFINES) || fail=1; \
 	done; \
 	exit $$fail
 
