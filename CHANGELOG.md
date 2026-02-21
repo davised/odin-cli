@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use `de
 
 ## [Unreleased]
 
+## [dev-2026-02.0.1] - 2026-02-20
+
+### Changed
+
+- **repo**: Update versioning strategy — tags on `main`, release branches only when moving to a new Odin version.
+- **repo**: Add `VERSION` file and `make version` target for build-time version injection.
+
+### Fixed
+
+- **repo**: Remove unused `-define:` flags from example and bench builds that caused compiler warnings.
+- **repo**: Fix CHANGELOG to reflect actual release state.
+
 ## [dev-2026-02.0.0] - 2026-02-20
 
 Initial release targeting Odin `dev-2026-02`.
@@ -39,5 +51,6 @@ Initial release targeting Odin `dev-2026-02`.
 - **repo**: Add CONTRIBUTING.md, Makefile, and developer documentation.
 - **repo**: Add CHANGELOG.md.
 
-[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.0.0...HEAD
+[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.0.1...HEAD
+[dev-2026-02.0.1]: https://github.com/davised/odin-cli/releases/tag/dev-2026-02.0.1
 [dev-2026-02.0.0]: https://github.com/davised/odin-cli/releases/tag/dev-2026-02.0.0
