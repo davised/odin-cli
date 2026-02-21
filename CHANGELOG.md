@@ -6,7 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use `de
 
 ## [Unreleased]
 
-Initial development targeting Odin `dev-2026-02`.
+## [dev-2026-02.0.0] - 2026-02-20
+
+Initial release targeting Odin `dev-2026-02`.
 
 ### Added
 
@@ -36,3 +38,6 @@ Initial development targeting Odin `dev-2026-02`.
 - **repo**: Add compatibility section documenting versioning scheme (`dev-YYYY-MM.minor.patch`).
 - **repo**: Add CONTRIBUTING.md, Makefile, and developer documentation.
 - **repo**: Add CHANGELOG.md.
+
+[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.0.0...HEAD
+[dev-2026-02.0.0]: https://github.com/davised/odin-cli/releases/tag/dev-2026-02.0.0
