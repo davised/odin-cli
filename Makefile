@@ -32,14 +32,14 @@ test:
 
 ## bench: Build and run benchmarks
 bench:
-	odin build bench -out:bench.bin -o:speed $(DEFINES) && ./bench.bin
+	odin build bench -out:bench.bin -o:speed && ./bench.bin
 
 ## examples: Build all examples
 examples:
 	@fail=0; \
 	for ex in $(EXAMPLES); do \
 		echo "=== $$ex ==="; \
-		odin build examples/$$ex -out:examples/$$ex/$$ex $(DEFINES) || fail=1; \
+		odin build examples/$$ex -out:examples/$$ex/$$ex || fail=1; \
 	done; \
 	exit $$fail
 
