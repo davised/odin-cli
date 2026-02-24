@@ -245,7 +245,6 @@ write_help :: proc(
 
 	// --- Arguments section (positionals) ---
 	if len(positionals) > 0 {
-		io.write_string(w, "\n\n", n)
 		if mode == .Plain {
 			write_styled(w, "Arguments:", theme.heading_style, mode, n)
 			io.write_string(w, "\n", n)
@@ -284,7 +283,6 @@ write_help :: proc(
 
 	// --- Render option sections with unified widths ---
 	if len(ungrouped) > 0 {
-		io.write_string(w, "\n\n", n)
 		write_options_panel(w, ungrouped[:], "Options", flag_prefix, parsing_style, has_any_short, theme, mode, n, defaults_any, width, unified_widths)
 	}
 
@@ -292,25 +290,21 @@ write_help :: proc(
 		panel_opts := collect_panel_options(options[:], panel)
 		if len(panel_opts) == 0 do continue
 
-		io.write_string(w, "\n\n", n)
 		write_options_panel(w, panel_opts, panel.name, flag_prefix, parsing_style, has_any_short, theme, mode, n, defaults_any, width, unified_widths)
 	}
 
 	for &tp in tag_panels {
 		if len(tp.fields) == 0 do continue
 
-		io.write_string(w, "\n\n", n)
 		write_options_panel(w, tp.fields[:], tp.name, flag_prefix, parsing_style, has_any_short, theme, mode, n, defaults_any, width, unified_widths)
 	}
 
 	if len(visible_global) > 0 {
-		io.write_string(w, "\n\n", n)
 		write_options_panel(w, visible_global[:], "Global Options", flag_prefix, parsing_style, has_any_short, theme, mode, n, global_defaults_any, width, unified_widths)
 	}
 
 	// --- Commands section ---
 	if len(commands) > 0 {
-		io.write_string(w, "\n\n", n)
 		if mode == .Plain {
 			write_styled(w, "Commands:", theme.heading_style, mode, n)
 			io.write_string(w, "\n", n)

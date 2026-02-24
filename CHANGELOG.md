@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use `de
 
 ## [Unreleased]
 
+## [dev-2026-02.2.0] - 2026-02-23
+
+### Added
+
+- **cli**: Epilog support — add trailing text (usage examples, notes) after all help sections via `epilog` parameter on `add_command`, `add_subcommand`, and `parse_or_exit`.
+- **cli**: Epilog integration tests and documentation in TUTORIAL.md.
+
+### Changed
+
+- **cli**: Bold flag names in default theme for improved scannability.
+- **cli**: Double blank-line spacing between help panels for better visual separation.
+- **examples**: Add epilog with usage examples to `hqsub_demo` submit command.
+
 ## [dev-2026-02.1.0] - 2026-02-23
 
 ### Added
@@ -62,7 +75,8 @@ Initial release targeting Odin `dev-2026-02`.
 - **repo**: Add CONTRIBUTING.md, Makefile, and developer documentation.
 - **repo**: Add CHANGELOG.md.
 
-[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.1.0...HEAD
+[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.2.0...HEAD
+[dev-2026-02.2.0]: https://github.com/davised/odin-cli/compare/dev-2026-02.1.0...dev-2026-02.2.0
 [dev-2026-02.1.0]: https://github.com/davised/odin-cli/compare/dev-2026-02.0.1...dev-2026-02.1.0
 [dev-2026-02.0.1]: https://github.com/davised/odin-cli/releases/tag/dev-2026-02.0.1
 [dev-2026-02.0.0]: https://github.com/davised/odin-cli/releases/tag/dev-2026-02.0.0
