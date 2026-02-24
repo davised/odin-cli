@@ -743,3 +743,40 @@ test_preprocess_multi_via_short_flags :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(result), 1)
 	testing.expect_value(t, result[0], "--nodes=foo,bar")
 }
+
+// --- Panel tag tests ---
+
+@(test)
+test_extract_flags_panel_tag :: proc(t: ^testing.T) {
+	Opts :: struct {
+		cpus:   int    `args:"panel=Resources" usage:"CPU cores"`,
+		memory: string `args:"panel=Resources" usage:"Memory limit"`,
+		output: string `usage:"Output file"`,
+	}
+	infos := extract_flags(Opts)
+	testing.expect_value(t, infos[0].panel, "Resources")
+	testing.expect_value(t, infos[1].panel, "Resources")
+	testing.expect_value(t, infos[2].panel, "")
+}
+
+@(test)
+test_extract_flags_panel_empty_string :: proc(t: ^testing.T) {
+	Opts :: struct {
+		cpus: int `args:"panel=" usage:"CPU cores"`,
+	}
+	infos := extract_flags(Opts)
+	testing.expect_value(t, infos[0].panel, "")
+}
+
+@(test)
+test_extract_flags_panel_with_other_subtags :: proc(t: ^testing.T) {
+	Opts :: struct {
+		cpus: int `args:"short=j,min=1,panel=Resources" usage:"CPU cores"`,
+	}
+	infos := extract_flags(Opts)
+	testing.expect_value(t, infos[0].panel, "Resources")
+	testing.expect_value(t, infos[0].short_name, "j")
+	min_v, min_ok := infos[0].min_val.?
+	testing.expect(t, min_ok, "Should have min_val")
+	testing.expect_value(t, min_v, 1.0)
+}

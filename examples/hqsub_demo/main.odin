@@ -33,20 +33,20 @@ Submit_Flags :: struct {
 	name:      string   `args:"short=n,required" usage:"Job name (must be unique within the cluster queue)"`,
 	queue:     string   `args:"short=q" usage:"Target queue to submit the job to"`,
 	priority:  Priority `args:"short=p" usage:"Job priority level within the queue"`,
-	cpus:      int      `args:"short=j,min=0" usage:"Number of CPU cores to allocate for this job"`,
-	memory:    string   `args:"short=m" usage:"Memory limit per node (e.g. 4G, 512M). Jobs exceeding this limit will be killed by the scheduler."`,
-	gpus:      int      `args:"min=0" usage:"Number of GPUs to allocate. Requires a GPU-enabled queue."`,
-	wall_time: string   `args:"short=t" usage:"Maximum wall time for the job (e.g. 2h, 30m). Jobs running longer than this will be terminated."`,
-	output:    string   `args:"short=o" usage:"Path for stdout log file. Supports substitution patterns like %j (job ID) and %N (node name)."`,
-	error_log: string   `args:"short=e,name=error" usage:"Path for stderr log file. Defaults to the same path as stdout if not specified."`,
-	notify:    string   `args:"env=HQSUB_NOTIFY" usage:"Email address for job lifecycle notifications (begin, end, fail)"`,
+	cpus:      int      `args:"short=j,min=0,panel=Resources" usage:"Number of CPU cores to allocate for this job"`,
+	memory:    string   `args:"short=m,panel=Resources" usage:"Memory limit per node (e.g. 4G, 512M). Jobs exceeding this limit will be killed by the scheduler."`,
+	gpus:      int      `args:"min=0,panel=Resources" usage:"Number of GPUs to allocate. Requires a GPU-enabled queue."`,
+	wall_time: string   `args:"short=t,panel=Resources" usage:"Maximum wall time for the job (e.g. 2h, 30m). Jobs running longer than this will be terminated."`,
+	output:    string   `args:"short=o,panel=I/O" usage:"Path for stdout log file. Supports substitution patterns like %j (job ID) and %N (node name)."`,
+	error_log: string   `args:"short=e,name=error,panel=I/O" usage:"Path for stderr log file. Defaults to the same path as stdout if not specified."`,
+	notify:    string   `args:"env=HQSUB_NOTIFY,panel=I/O" usage:"Email address for job lifecycle notifications (begin, end, fail)"`,
 	dry_run:   bool     `args:"short=d" usage:"Validate the job specification and print what would be submitted without actually submitting"`,
 	wait:      bool     `args:"short=w" usage:"Block until the job completes and return its exit code"`,
 	json:      bool     `args:"xor=output-fmt" usage:"Output as JSON"`,
 	yaml:      bool     `args:"xor=output-fmt" usage:"Output as YAML"`,
-	array:     string   `usage:"Submit as an array job with the given range (e.g. 1-100, 1-50:5 for step size). Each array task runs independently."`,
-	depend:    string   `usage:"Job dependency expression (e.g. afterok:12345, afterany:12345:12346). Job will not start until dependencies are satisfied."`,
-	image:     string   `args:"env=HQSUB_IMAGE" usage:"Container image for the job (e.g. docker://ubuntu:22.04). Requires container runtime on the cluster."`,
+	array:     string   `args:"panel=Advanced" usage:"Submit as an array job with the given range (e.g. 1-100, 1-50:5 for step size). Each array task runs independently."`,
+	depend:    string   `args:"panel=Advanced" usage:"Job dependency expression (e.g. afterok:12345, afterany:12345:12346). Job will not start until dependencies are satisfied."`,
+	image:     string   `args:"env=HQSUB_IMAGE,panel=Advanced" usage:"Container image for the job (e.g. docker://ubuntu:22.04). Requires container runtime on the cluster."`,
 }
 
 submit_action :: proc(flags: ^Submit_Flags, program: string) -> int {
@@ -121,11 +121,6 @@ main :: proc() {
 		description = "Submit a new job to the cluster",
 		action = submit_action,
 		aliases = {"sub", "s"},
-		panel_config = {
-			cli.Panel{name = "Resources",  fields = {"cpus", "memory", "gpus", "wall_time"}},
-			cli.Panel{name = "I/O",        fields = {"output", "error_log", "notify"}},
-			cli.Panel{name = "Advanced",   fields = {"array", "depend", "image"}},
-		},
 	)
 
 	cli.add_command(&app, Status_Flags, "status",

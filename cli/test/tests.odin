@@ -1088,3 +1088,101 @@ test_help_shows_path_constraint :: proc(t: ^testing.T) {
 
 	testing.expect(t, strings.contains(output, "[path]"), "Should show path constraint in help")
 }
+
+// --- Tag-based panel help display tests ---
+
+@(test)
+test_write_help_tag_panels :: proc(t: ^testing.T) {
+	Opts :: struct {
+		name:   string `args:"required" usage:"Job name"`,
+		cpus:   int    `args:"panel=Resources" usage:"CPU cores"`,
+		memory: string `args:"panel=Resources" usage:"Memory limit"`,
+		output: string `usage:"Output file"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Plain})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "Resources:"), "Should show tag panel heading")
+	testing.expect(t, strings.contains(output, "Options:"), "Should show ungrouped Options heading")
+	testing.expect(t, strings.contains(output, "--cpus"), "Should show cpus in Resources panel")
+	testing.expect(t, strings.contains(output, "--memory"), "Should show memory in Resources panel")
+}
+
+@(test)
+test_write_help_tag_panels_field_routing :: proc(t: ^testing.T) {
+	// Fields with panel= go to tag panels, fields without go to ungrouped.
+	Opts :: struct {
+		verbose: bool   `usage:"Verbose"`,
+		cpus:    int    `args:"panel=Resources" usage:"CPU cores"`,
+		output:  string `usage:"Output file"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Plain})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "Resources:"), "Should show Resources panel")
+	testing.expect(t, strings.contains(output, "Options:"), "Should show ungrouped Options")
+
+	// --cpus should appear after "Resources:" but NOT between "Options:" and "Resources:".
+	options_pos := strings.index(output, "Options:")
+	resources_pos := strings.index(output, "Resources:")
+	cpus_pos := strings.index(output, "--cpus")
+	testing.expect(t, options_pos >= 0, "Options: should exist")
+	testing.expect(t, resources_pos >= 0, "Resources: should exist")
+	testing.expect(t, cpus_pos >= 0, "--cpus should exist")
+	testing.expect(t, cpus_pos > resources_pos, "--cpus should appear after Resources: heading, not in ungrouped Options")
+}
+
+@(test)
+test_write_help_panel_config_overrides_tag :: proc(t: ^testing.T) {
+	// When both panel_config and panel= tag assign a field, panel_config wins.
+	Opts :: struct {
+		cpus:   int    `args:"panel=FromTag" usage:"CPU cores"`,
+		memory: string `args:"panel=FromTag" usage:"Memory limit"`,
+	}
+
+	panels := []cli.Panel{
+		{name = "FromConfig", fields = {"cpus"}},
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, panel_config = panels, mode = .Plain})
+	output := strings.to_string(sb)
+
+	// cpus should be in FromConfig (panel_config wins), memory should be in FromTag.
+	testing.expect(t, strings.contains(output, "FromConfig:"), "Should show panel_config panel")
+	testing.expect(t, strings.contains(output, "FromTag:"), "Should show tag panel for remaining fields")
+
+	// panel_config panels should render before tag panels.
+	config_pos := strings.index(output, "FromConfig:")
+	tag_pos := strings.index(output, "FromTag:")
+	testing.expect(t, config_pos >= 0, "FromConfig: should exist")
+	testing.expect(t, tag_pos >= 0, "FromTag: should exist")
+	testing.expect(t, config_pos < tag_pos, "panel_config panel should appear before tag panel")
+}
+
+@(test)
+test_write_help_tag_panels_bordered :: proc(t: ^testing.T) {
+	Opts :: struct {
+		cpus:   int    `args:"panel=Resources" usage:"CPU cores"`,
+		output: string `usage:"Output file"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{parsing_style = .Unix, mode = .Full, max_width = 80, theme = cli.plain_theme()})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "╭─ Resources ─"), "Should have bordered Resources panel")
+	testing.expect(t, strings.contains(output, "╭─ Options ─"), "Should have bordered Options panel")
+}

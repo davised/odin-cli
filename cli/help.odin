@@ -148,9 +148,33 @@ write_help :: proc(
 		}
 	}
 
+	// Discover tag-based panels (first-seen order).
+	// Fields claimed by panel_config are skipped.
+	// Fields with panel tag and NOT in panel_config go to auto-discovered panels.
+	// Fields with no panel assignment go to ungrouped "Options".
+	Tag_Panel :: struct {
+		name:   string,
+		fields: [dynamic]Flag_Info,
+	}
+	tag_panels := make([dynamic]Tag_Panel, 0, 4, context.temp_allocator)
+	tag_panel_index := make(map[string]int, allocator = context.temp_allocator)
+
 	ungrouped := make([dynamic]Flag_Info, 0, len(options), context.temp_allocator)
 	for opt in options {
-		if opt.field_name not_in panel_fields {
+		if opt.field_name in panel_fields {
+			continue // claimed by panel_config
+		}
+		if len(opt.panel) > 0 {
+			// Route to tag-discovered panel.
+			if idx, found := tag_panel_index[opt.panel]; found {
+				append(&tag_panels[idx].fields, opt)
+			} else {
+				tag_panel_index[opt.panel] = len(tag_panels)
+				tp := Tag_Panel{name = opt.panel, fields = make([dynamic]Flag_Info, 0, 4, context.temp_allocator)}
+				append(&tp.fields, opt)
+				append(&tag_panels, tp)
+			}
+		} else {
 			append(&ungrouped, opt)
 		}
 	}
@@ -210,6 +234,10 @@ write_help :: proc(
 		add_option_rows(&scratch, panel_opts, flag_prefix, parsing_style, has_any_short, theme, defaults_any)
 	}
 
+	for &tp in tag_panels {
+		add_option_rows(&scratch, tp.fields[:], flag_prefix, parsing_style, has_any_short, theme, defaults_any)
+	}
+
 	add_option_rows(&scratch, visible_global[:], flag_prefix, parsing_style, has_any_short, theme, global_defaults_any)
 
 	unified_widths := table.compute_column_widths(scratch)
@@ -265,6 +293,13 @@ write_help :: proc(
 
 		io.write_string(w, "\n", n)
 		write_options_panel(w, panel_opts, panel.name, flag_prefix, parsing_style, has_any_short, theme, mode, n, defaults_any, width, unified_widths)
+	}
+
+	for &tp in tag_panels {
+		if len(tp.fields) == 0 do continue
+
+		io.write_string(w, "\n", n)
+		write_options_panel(w, tp.fields[:], tp.name, flag_prefix, parsing_style, has_any_short, theme, mode, n, defaults_any, width, unified_widths)
 	}
 
 	if len(visible_global) > 0 {

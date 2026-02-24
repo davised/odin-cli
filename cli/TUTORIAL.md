@@ -156,6 +156,25 @@ cli.parse_or_exit(&options, os.args,
 
 Flags listed in panels appear under their section heading. Remaining flags appear under "Options".
 
+### Inline panel assignment with `panel=`
+
+Instead of listing field names in a separate `panel_config`, you can assign panels directly on the struct field with `panel=Name`:
+
+```odin
+Submit_Flags :: struct {
+    name:      string `args:"required" usage:"Job name"`,
+    cpus:      int    `args:"panel=Resources" usage:"CPU cores"`,
+    memory:    string `args:"panel=Resources" usage:"Memory limit"`,
+    wall_time: string `args:"panel=Resources" usage:"Wall time"`,
+    output:    string `args:"panel=I/O" usage:"Stdout log path"`,
+    notify:    string `args:"panel=I/O" usage:"Notification email"`,
+}
+```
+
+Tag-based panels are discovered automatically in first-seen order. Fields without a `panel` tag appear under "Options".
+
+Both approaches coexist: if the same field is claimed by `panel_config` *and* has a `panel=` tag, `panel_config` takes priority. Use `panel_config` when you need explicit ordering; use `panel=` tags for convenience when the declaration order is sufficient.
+
 ---
 
 ## Step 3: Multi-Command Apps
@@ -578,6 +597,7 @@ once before parsing. Pass `nil` to disable a previously registered setter or che
 | `file_exists` | `file_exists` | Path must be an existing file |
 | `dir_exists` | `dir_exists` | Path must be an existing directory |
 | `path_exists` | `path_exists` | Path must exist |
+| `panel=Name` | `panel=Resources` | Assign flag to a named help panel |
 | `xor=G` | `xor=fmt` | At most one flag in group G |
 | `one_of=G` | `one_of=auth` | Exactly one flag in group G required |
 | `any_of=G` | `any_of=feat` | At least one flag in group G required |

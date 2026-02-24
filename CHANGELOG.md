@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use `de
 
 ## [Unreleased]
 
+## [dev-2026-02.1.0] - 2026-02-23
+
+### Added
+
+- **cli**: `panel=Name` struct tag for inline help panel assignment. Fields tagged with `args:"panel=Resources"` are automatically grouped into named help sections, as an alternative to the existing `panel_config` approach. Both methods coexist; `panel_config` takes priority when both assign the same field.
+- **cli**: Document `panel=Name` tag in tutorial and quick reference.
+
+### Changed
+
+- **examples**: Convert `hqsub_demo` to use `panel=` tags instead of `panel_config`, demonstrating the tag-based approach.
+
 ## [dev-2026-02.0.1] - 2026-02-20
 
 ### Changed
@@ -51,6 +62,7 @@ Initial release targeting Odin `dev-2026-02`.
 - **repo**: Add CONTRIBUTING.md, Makefile, and developer documentation.
 - **repo**: Add CHANGELOG.md.
 
-[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.0.1...HEAD
+[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.1.0...HEAD
+[dev-2026-02.1.0]: https://github.com/davised/odin-cli/compare/dev-2026-02.0.1...dev-2026-02.1.0
 [dev-2026-02.0.1]: https://github.com/davised/odin-cli/releases/tag/dev-2026-02.0.1
 [dev-2026-02.0.0]: https://github.com/davised/odin-cli/releases/tag/dev-2026-02.0.0

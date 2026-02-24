@@ -39,6 +39,7 @@ Flag_Info :: struct {
 	is_multi:         bool,        // from args:"multi" — string field, merges repeated flag values with comma
 	is_enum:          bool,        // auto-detected from field type
 	group:            Flag_Group,  // constraint group (zero value = no group)
+	panel:            string,      // from args:"panel=Name" — help panel assignment
 	min_val:          Maybe(f64),  // from args:"min=N"
 	max_val:          Maybe(f64),  // from args:"max=N"
 	file_exists:      bool,        // from args:"file_exists"
@@ -87,6 +88,8 @@ SUBTAG_FILE_EXISTS :: "file_exists"
 SUBTAG_DIR_EXISTS :: "dir_exists"
 @(private = "file")
 SUBTAG_PATH_EXISTS :: "path_exists"
+@(private = "file")
+SUBTAG_PANEL :: "panel"
 
 // extract_flags introspects a core:flags-annotated struct type and returns
 // a slice of Flag_Info describing each field. Uses temp_allocator.
@@ -161,6 +164,11 @@ extract_flags :: proc(data_type: typeid) -> []Flag_Info {
 			if _, has_file := get_subtag(args_tag, SUBTAG_FILE_EXISTS); has_file { info.file_exists = true }
 			if _, has_dir := get_subtag(args_tag, SUBTAG_DIR_EXISTS); has_dir { info.dir_exists = true }
 			if _, has_path := get_subtag(args_tag, SUBTAG_PATH_EXISTS); has_path { info.path_exists = true }
+
+			// Panel tag.
+			if panel_val, has_panel := get_subtag(args_tag, SUBTAG_PANEL); has_panel {
+				info.panel = panel_val
+			}
 		}
 
 		// Auto-detect enum types.
