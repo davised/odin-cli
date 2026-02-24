@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use `de
 
 ## [Unreleased]
 
+## [dev-2026-02.3.0] - 2026-02-24
+
+### Added
+
+- **term**: `set_render_mode`/`get_render_mode` for process-wide render mode, so `fmt` formatters respect TTY/pipe detection without requiring a handle.
+
+### Changed
+
+- **cli**: `run()` and `parse_or_exit()` now set the global render mode at startup.
+- **style/table/tree/panel**: `fmt` formatter callbacks read the global render mode instead of defaulting to `.Full`, so `fmt.println` output correctly strips ANSI when piped.
+
 ## [dev-2026-02.2.1] - 2026-02-23
 
 ### Fixed
@@ -81,7 +92,8 @@ Initial release targeting Odin `dev-2026-02`.
 - **repo**: Add CONTRIBUTING.md, Makefile, and developer documentation.
 - **repo**: Add CHANGELOG.md.
 
-[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.2.1...HEAD
+[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.3.0...HEAD
+[dev-2026-02.3.0]: https://github.com/davised/odin-cli/compare/dev-2026-02.2.1...dev-2026-02.3.0
 [dev-2026-02.2.1]: https://github.com/davised/odin-cli/compare/dev-2026-02.2.0...dev-2026-02.2.1
 [dev-2026-02.2.0]: https://github.com/davised/odin-cli/compare/dev-2026-02.1.0...dev-2026-02.2.0
 [dev-2026-02.1.0]: https://github.com/davised/odin-cli/compare/dev-2026-02.0.1...dev-2026-02.1.0

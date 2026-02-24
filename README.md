@@ -127,7 +127,7 @@ Every package that produces output writes directly to an `io.Writer`. No interme
 
 ### Render mode awareness
 
-All output packages auto-detect terminal capabilities per output handle. They respect the [`NO_COLOR`](https://no-color.org/) standard, detect TTY vs pipe, and degrade gracefully: full color in terminals, plain text through pipes.
+All output packages auto-detect terminal capabilities. The CLI framework sets a process-wide render mode at startup, and all `fmt` formatters read it automatically. They respect the [`NO_COLOR`](https://no-color.org/) standard, detect TTY vs pipe, and degrade gracefully: full color in terminals, plain text through pipes — including when using `fmt.println` directly.
 
 ## Quick Start
 
