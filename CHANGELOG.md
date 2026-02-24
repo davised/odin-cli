@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use `de
 
 ## [Unreleased]
 
+## [dev-2026-02.2.1] - 2026-02-23
+
+### Fixed
+
+- **cli**: Remove extra blank-line spacing between help panels introduced in 2.0.
+
 ## [dev-2026-02.2.0] - 2026-02-23
 
 ### Added
@@ -16,7 +22,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions use `de
 ### Changed
 
 - **cli**: Bold flag names in default theme for improved scannability.
-- **cli**: Double blank-line spacing between help panels for better visual separation.
+- **cli**: Remove blank-line separators between help panels for tighter layout.
 - **examples**: Add epilog with usage examples to `hqsub_demo` submit command.
 
 ## [dev-2026-02.1.0] - 2026-02-23
@@ -75,7 +81,8 @@ Initial release targeting Odin `dev-2026-02`.
 - **repo**: Add CONTRIBUTING.md, Makefile, and developer documentation.
 - **repo**: Add CHANGELOG.md.
 
-[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.2.0...HEAD
+[Unreleased]: https://github.com/davised/odin-cli/compare/dev-2026-02.2.1...HEAD
+[dev-2026-02.2.1]: https://github.com/davised/odin-cli/compare/dev-2026-02.2.0...dev-2026-02.2.1
 [dev-2026-02.2.0]: https://github.com/davised/odin-cli/compare/dev-2026-02.1.0...dev-2026-02.2.0
 [dev-2026-02.1.0]: https://github.com/davised/odin-cli/compare/dev-2026-02.0.1...dev-2026-02.1.0
 [dev-2026-02.0.1]: https://github.com/davised/odin-cli/releases/tag/dev-2026-02.0.1
