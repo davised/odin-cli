@@ -30,6 +30,7 @@ release:
 	@if git rev-parse "$(VERSION)" >/dev/null 2>&1; then \
 		echo "Error: tag $(VERSION) already exists"; exit 1; \
 	fi
+	git push origin HEAD
 	git tag -a "$(VERSION)" -m "Release $(VERSION)"
 	git push origin "$(VERSION)"
 	$(MAKE) release-notes | gh release create "$(VERSION)" --title "$(VERSION)" --notes-file -
