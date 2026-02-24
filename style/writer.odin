@@ -312,7 +312,7 @@ Styled_Text_Formatter :: proc(fi: ^fmt.Info, arg: any, verb: rune) -> (res: bool
 			io.write_string(fi.writer, "")
 			return true
 		}
-		return to_writer(fi.writer, styled_text^, &fi.n)
+		return to_writer(fi.writer, styled_text^, &fi.n, term.get_render_mode())
 	case 'w':
 		fi.ignore_user_formatters = true
 		fmt.fmt_value(fi = fi, v = styled_text^, verb = 'w')

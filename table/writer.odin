@@ -102,7 +102,7 @@ table_formatter :: proc(fi: ^fmt.Info, arg: any, verb: rune) -> bool {
 
 	switch verb {
 	case 'v', 's':
-		return to_writer(fi.writer, t^, &fi.n)
+		return to_writer(fi.writer, t^, &fi.n, term.get_render_mode())
 	case 'w':
 		fi.ignore_user_formatters = true
 		fmt.fmt_value(fi = fi, v = t^, verb = 'w')

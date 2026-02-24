@@ -402,6 +402,7 @@ run :: proc(app: ^App, program_args: []string) -> int {
 	args := program_args[1:] if len(program_args) > 1 else nil
 
 	mode := term.detect_render_mode(os.stdout)
+	term.set_render_mode(mode)
 	stderr := os.stream_from_handle(os.stderr)
 	stdout := os.stream_from_handle(os.stdout)
 
@@ -536,6 +537,7 @@ parse_or_exit :: proc(
 	}
 
 	resolved_mode := resolve_mode(mode)
+	term.set_render_mode(resolved_mode)
 	all_flags := extract_flags(T)
 
 	// Check for --completions before help_on_empty (user may run `myapp --completions bash` with help_on_empty).

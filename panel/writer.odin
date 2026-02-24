@@ -72,7 +72,7 @@ panel_formatter :: proc(fi: ^fmt.Info, arg: any, verb: rune) -> bool {
 
 	switch verb {
 	case 'v', 's':
-		return to_writer(fi.writer, p^, &fi.n)
+		return to_writer(fi.writer, p^, &fi.n, term.get_render_mode())
 	case 'w':
 		fi.ignore_user_formatters = true
 		fmt.fmt_value(fi = fi, v = p^, verb = 'w')

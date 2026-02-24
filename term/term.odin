@@ -46,6 +46,22 @@ detect_render_mode :: proc(handle: os.Handle) -> Render_Mode {
 	return .Full
 }
 
+// _global_mode is the process-wide render mode, set once at startup.
+// Defaults to .Full for backward compatibility if never explicitly set.
+@(private = "file")
+_global_mode: Render_Mode = .Full
+
+// set_render_mode stores the detected render mode for the process.
+// Called once by the CLI framework during run() / parse_or_exit().
+set_render_mode :: proc(mode: Render_Mode) {
+	_global_mode = mode
+}
+
+// get_render_mode returns the process-wide render mode.
+get_render_mode :: proc() -> Render_Mode {
+	return _global_mode
+}
+
 @(private = "file")
 force_color_set :: proc() -> bool {
 	fc, fc_ok := os.lookup_env("FORCE_COLOR", context.temp_allocator)
