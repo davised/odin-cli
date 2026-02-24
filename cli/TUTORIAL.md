@@ -220,6 +220,20 @@ cli.add_command(&app, Add_Flags, "add",
 )
 ```
 
+### Command epilog
+
+Add trailing text (usage examples, notes) after all help sections with `epilog`:
+
+```odin
+cli.add_command(&app, Submit_Flags, "submit",
+    description = "Submit a job",
+    action = submit_action,
+    epilog = "Examples:\n  myapp submit job.sh -n test\n  myapp submit --dry-run job.sh -n demo",
+)
+```
+
+The epilog also works with `parse_or_exit` for single-command tools.
+
 ### Command aliases
 
 Aliases let users type less:
@@ -611,6 +625,7 @@ once before parsing. Pass `nil` to disable a previously registered setter or che
 | `program_args` | `[]string` | Usually `os.args` |
 | `description` | `string` | Shown below usage line |
 | `version` | `string` | Shown with `--version` and in help |
+| `epilog` | `string` | Text shown after all help sections (e.g. examples) |
 | `panel_config` | `[]Panel` | Group flags into named sections |
 | `help_on_empty` | `bool` | Show help when no args given |
 | `parsing_style` | `Parsing_Style` | `.Unix` (default) or `.Odin` |

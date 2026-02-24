@@ -28,7 +28,7 @@ default_theme :: proc() -> Theme {
 		heading_style     = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Yellow},
 		usage_label_style = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Yellow},
 		program_style     = style.Style{text_styles = {.Bold}},
-		flag_name_style   = style.Style{foreground_color = style.ANSI_Color.Green},
+		flag_name_style   = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Green},
 		arg_name_style    = style.Style{text_styles = {.Bold}, foreground_color = style.ANSI_Color.Cyan},
 		type_style        = style.Style{foreground_color = style.ANSI_Color.Yellow},
 		default_style     = style.Style{foreground_color = style.ANSI_Color.Bright_Black},

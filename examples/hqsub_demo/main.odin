@@ -121,6 +121,7 @@ main :: proc() {
 		description = "Submit a new job to the cluster",
 		action = submit_action,
 		aliases = {"sub", "s"},
+		epilog = "Examples:\n  hqsub submit job.sh -n myjob -j 4 -m 8G\n  hqsub submit --dry-run job.sh -n test -q gpu --gpus=2",
 	)
 
 	cli.add_command(&app, Status_Flags, "status",

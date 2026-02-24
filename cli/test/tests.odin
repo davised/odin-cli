@@ -1170,6 +1170,77 @@ test_write_help_panel_config_overrides_tag :: proc(t: ^testing.T) {
 	testing.expect(t, config_pos < tag_pos, "panel_config panel should appear before tag panel")
 }
 
+// --- Epilog tests ---
+
+@(test)
+test_write_help_epilog :: proc(t: ^testing.T) {
+	Opts :: struct {
+		verbose: bool `usage:"Verbose output"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{
+		parsing_style = .Unix,
+		mode = .Plain,
+		epilog = "Examples:\n  test-prog --verbose",
+	})
+	output := strings.to_string(sb)
+
+	testing.expect(t, strings.contains(output, "Examples:"), "Should contain epilog text")
+	testing.expect(t, strings.contains(output, "test-prog --verbose"), "Should contain epilog example")
+}
+
+@(test)
+test_write_help_epilog_after_last_section :: proc(t: ^testing.T) {
+	Opts :: struct {
+		verbose: bool `usage:"Verbose output"`,
+	}
+
+	sb := strings.builder_make(context.temp_allocator)
+	w := strings.to_writer(&sb)
+
+	cli.write_help(w, Opts, "test-prog", cli.Help_Config{
+		parsing_style = .Unix,
+		mode = .Plain,
+		epilog = "EPILOG_MARKER",
+	})
+	output := strings.to_string(sb)
+
+	options_pos := strings.index(output, "Options:")
+	epilog_pos := strings.index(output, "EPILOG_MARKER")
+	testing.expect(t, options_pos >= 0, "Options: should exist")
+	testing.expect(t, epilog_pos >= 0, "Epilog should exist")
+	testing.expect(t, epilog_pos > options_pos, "Epilog should appear after Options section")
+}
+
+@(test)
+test_write_help_empty_epilog :: proc(t: ^testing.T) {
+	Opts :: struct {
+		verbose: bool `usage:"Verbose output"`,
+	}
+
+	sb_with := strings.builder_make(context.temp_allocator)
+	w_with := strings.to_writer(&sb_with)
+	cli.write_help(w_with, Opts, "test-prog", cli.Help_Config{
+		parsing_style = .Unix,
+		mode = .Plain,
+		epilog = "",
+	})
+	output_with := strings.to_string(sb_with)
+
+	sb_without := strings.builder_make(context.temp_allocator)
+	w_without := strings.to_writer(&sb_without)
+	cli.write_help(w_without, Opts, "test-prog", cli.Help_Config{
+		parsing_style = .Unix,
+		mode = .Plain,
+	})
+	output_without := strings.to_string(sb_without)
+
+	testing.expect(t, output_with == output_without, "Empty epilog should produce identical output to no epilog")
+}
+
 @(test)
 test_write_help_tag_panels_bordered :: proc(t: ^testing.T) {
 	Opts :: struct {

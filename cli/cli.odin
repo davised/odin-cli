@@ -32,6 +32,7 @@ _Run_Proc :: #type proc(
 Command :: struct {
 	name:         string,
 	description:  string,
+	epilog:       string,
 	aliases:      []string,
 	panel_config: []Panel,
 	hidden:       bool,
@@ -127,10 +128,12 @@ add_command :: proc(
 	aliases: []string = nil,
 	panel_config: []Panel = nil,
 	hidden: bool = false,
+	epilog: string = "",
 ) {
 	append(&app.commands, Command {
 		name           = name,
 		description    = description,
+		epilog         = epilog,
 		aliases        = aliases,
 		panel_config   = panel_config,
 		hidden         = hidden,
@@ -161,6 +164,7 @@ add_subcommand :: proc(
 	aliases: []string = nil,
 	panel_config: []Panel = nil,
 	hidden: bool = false,
+	epilog: string = "",
 ) {
 	parent := find_command_by_path(app, parent_path)
 	assert(parent != nil, fmt.tprintf("Parent command '%s' not found", parent_path))
@@ -168,6 +172,7 @@ add_subcommand :: proc(
 	append(&parent.subcommands, Command {
 		name           = name,
 		description    = description,
+		epilog         = epilog,
 		aliases        = aliases,
 		panel_config   = panel_config,
 		hidden         = hidden,
@@ -262,6 +267,7 @@ make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 					panel_config = cmd.panel_config,
 					theme = app.theme,
 					description = cmd.description,
+					epilog = cmd.epilog,
 					max_width = app.max_width,
 					mode = mode,
 					defaults = &defaults,
@@ -342,6 +348,7 @@ make_runner :: proc($Flags_Type: typeid) -> _Run_Proc {
 					panel_config = cmd.panel_config,
 					theme = app.theme,
 					description = cmd.description,
+					epilog = cmd.epilog,
 					max_width = app.max_width,
 					mode = mode,
 					defaults = &defaults,
@@ -515,6 +522,7 @@ parse_or_exit :: proc(
 	panel_config: []Panel = nil,
 	description: string = "",
 	version: string = "",
+	epilog: string = "",
 	theme_override: Maybe(Theme) = nil,
 	mode: Maybe(term.Render_Mode) = nil,
 	help_on_empty: bool = false,
@@ -551,6 +559,7 @@ parse_or_exit :: proc(
 				theme = theme_override,
 				description = description,
 				version = version,
+				epilog = epilog,
 				mode = resolved_mode,
 				defaults = &defaults,
 			},
@@ -571,6 +580,7 @@ parse_or_exit :: proc(
 				theme = theme_override,
 				description = description,
 				version = version,
+				epilog = epilog,
 				mode = resolved_mode,
 				defaults = &defaults,
 			},
